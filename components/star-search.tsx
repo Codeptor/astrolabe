@@ -94,7 +94,7 @@ export function StarSearch({ stars, selected, onSelect }: StarSearchProps) {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
-        className="bg-transparent border-b border-foreground/20 px-0 py-1.5 text-[11px] w-full outline-none placeholder:text-muted"
+        className="bg-transparent border-b border-foreground/30 px-0 py-1.5 text-[11px] w-full outline-none placeholder:text-foreground/50 focus:border-accent"
         spellCheck={false}
         autoComplete="off"
       />
@@ -118,7 +118,7 @@ export function StarSearch({ stars, selected, onSelect }: StarSearchProps) {
               onClick={() => handleSelect(star)}
             >
               <span className="text-foreground truncate">{star.name}</span>
-              <span className="text-muted shrink-0">{star.dist.toFixed(2)} kpc</span>
+              <span className="text-foreground/50 shrink-0">{star.dist.toFixed(2)} kpc</span>
             </button>
           ))}
         </div>

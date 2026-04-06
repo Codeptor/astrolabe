@@ -9,7 +9,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="text-[10px] text-muted hover:text-foreground transition-colors"
+      className="text-[10px] text-foreground/70 hover:text-foreground transition-colors"
     >
       {resolvedTheme === "dark" ? "light" : "dark"}
     </button>

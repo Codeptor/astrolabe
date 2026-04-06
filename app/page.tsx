@@ -70,59 +70,56 @@ export default function Page() {
     )
   }
 
-  const dot = <span className="text-foreground/20">·</span>
+  const dot = <span className="text-foreground/40">·</span>
 
   return (
     <div
-      className="flex min-h-svh flex-col"
+      className="flex h-svh flex-col overflow-hidden"
       onClick={() => setLockedPulsar(null)}
     >
       {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 sm:pt-6 flex items-center justify-between">
-        <span className="text-[11px] text-muted">astrolabe</span>
-        <div className="flex items-center gap-3">
+      <header className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4 flex items-start justify-between z-50">
+        <div className="flex flex-col gap-1">
+          <span className="text-[11px] text-foreground">astrolabe</span>
+          <div className="w-[200px]">
+            <StarSearch stars={stars} selected={origin} onSelect={handleOriginChange} />
+          </div>
+        </div>
+        {plaqueData && (
+          <div className="flex gap-3 text-[10px] text-foreground/70 pt-0.5">
+            <span>{plaqueData.pulsars.length} pulsars</span>
+            {dot}
+            <span>from {origin.name}</span>
+            {dot}
+            <span>{distToGC.toFixed(1)} kpc</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3 pt-0.5">
           <ThemeToggle />
           <ExportButton svgRef={svgRef} starName={origin.name} />
         </div>
       </header>
 
-      {/* Main */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 pt-16 pb-12">
-        <div className="w-full max-w-[260px] mb-4">
-          <StarSearch stars={stars} selected={origin} onSelect={handleOriginChange} />
-        </div>
-
+      {/* Plaque */}
+      <main className="flex-1 min-h-0 flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
         {plaqueData && (
-          <>
-            <div className="mb-6 flex gap-3 text-[10px] text-muted">
-              <span>{plaqueData.pulsars.length} pulsars</span>
-              {dot}
-              <span>from {origin.name}</span>
-              {dot}
-              <span>{distToGC.toFixed(1)} kpc</span>
-            </div>
-
-            <div className="w-full max-w-[600px]" onClick={(e) => e.stopPropagation()}>
-              <Plaque
-                ref={svgRef}
-                data={plaqueData}
-                activePulsar={activePulsar}
-                onHover={setHoveredPulsar}
-                onClick={setLockedPulsar}
-              />
-            </div>
-
-            <div className="mt-6 h-[60px] text-center">
-              <PulsarTooltip pulsar={activePulsar} />
-            </div>
-          </>
+          <Plaque
+            ref={svgRef}
+            data={plaqueData}
+            activePulsar={activePulsar}
+            onHover={setHoveredPulsar}
+            onClick={setLockedPulsar}
+          />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="fixed inset-x-0 bottom-0 px-4 pb-4 sm:pb-6">
-        <p className="text-center text-[9px] text-muted/60">
-          data: ATNF Pulsar Catalogue v2.7.0 · {pulsars.length} pulsars
+      <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between">
+        <div className="h-[40px] flex-1">
+          <PulsarTooltip pulsar={activePulsar} />
+        </div>
+        <p className="text-[9px] text-foreground/50 shrink-0">
+          ATNF v2.7.0 · {pulsars.length} pulsars
         </p>
       </footer>
     </div>

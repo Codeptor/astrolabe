@@ -1,12 +1,24 @@
-import React, { forwardRef } from "react"
+import React, { forwardRef, useMemo } from "react"
 import type { PlaqueData, RelativePulsar } from "@/lib/types"
 import { periodToTicks } from "@/lib/binary-encoding"
 
-const CENTER = 300
-const LINE_START_OFFSET = 12
-const MAX_RADIUS = 600 * 0.42
-const GC_LINE_RADIUS = 600 * 0.48
+// Layout: matches reference repo proportions (1200x800 → 900x560)
+const VB_W = 1000
+const VB_H = 700
+const PAD = 50
+const EARTH_X = Math.round(VB_W * 0.35) // origin ~1/3 from left
+const EARTH_Y = VB_H / 2
+const GC_X = VB_W - PAD // galactic center marker at right edge
+const GC_DIST_PX = GC_X - EARTH_X // pixel length = scale reference
+const GC_DIST_KPC = 8.178
+
+// Visual params
+const LINE_W = 0.3
+const LINE_W_ACTIVE = 0.5
+const EARTH_R = 2.5
 const TRANSITION = "600ms cubic-bezier(0.16, 1, 0.3, 1)"
+const FONT_SIZE = 7 // for binary text
+const BINARY_OFFSET = 4 // gap between line end and binary text start
 
 interface PlaqueProps {
   data: PlaqueData
@@ -15,98 +27,91 @@ interface PlaqueProps {
   onClick: (pulsar: RelativePulsar | null) => void
 }
 
-function lineLength(dist: number, maxDist: number): number {
-  return LINE_START_OFFSET + (Math.log1p(dist) / Math.log1p(maxDist)) * (MAX_RADIUS - LINE_START_OFFSET)
+// Convert pulsar distance to pixel length — sqrt scaling for visual spread
+// Capped so lines + binary text stay within viewBox
+const MAX_LINE = Math.min(EARTH_Y - PAD, EARTH_X - PAD) * 0.85 // max reach in any direction
+
+function distToPixels(distKpc: number): number {
+  const ratio = distKpc / GC_DIST_KPC
+  return Math.min(Math.max(Math.sqrt(ratio) * GC_DIST_PX, 10), MAX_LINE)
 }
 
-function buildTickMarks(
-  angle: number,
-  length: number,
-  ticks: (0 | 1)[],
-): React.ReactNode[] {
-  const n = ticks.length
-  if (n === 0) return []
+// Convert period to binary string with | and -
+function periodToBinaryString(p0: number): string {
+  const ticks = periodToTicks(p0)
+  // Show up to 20 most significant bits
+  const display = ticks.slice(0, 20)
+  return display.map((b) => (b === 1 ? "|" : "-")).join("")
+}
 
-  const dx = Math.cos(angle)
-  const dy = -Math.sin(angle)
-  // perpendicular direction
-  const px = Math.sin(angle)
-  const py = Math.cos(angle)
-
-  const spacing = (length - LINE_START_OFFSET) / (n + 1)
-  const marks: React.ReactNode[] = []
-
-  for (let i = 0; i < n; i++) {
-    const t = LINE_START_OFFSET + spacing * (i + 1)
-    const cx = CENTER + dx * t
-    const cy = CENTER + dy * t
-    const halfLen = ticks[i] === 1 ? 3 : 1.5
-    marks.push(
-      <line
-        key={i}
-        x1={cx - px * halfLen}
-        y1={cy - py * halfLen}
-        x2={cx + px * halfLen}
-        y2={cy + py * halfLen}
-        style={{ transition: TRANSITION }}
-      />
-    )
+// Polar to cartesian (angle in radians, SVG y-down)
+function endpoint(angle: number, len: number): { x: number; y: number } {
+  return {
+    x: EARTH_X + Math.cos(angle) * len,
+    y: EARTH_Y - Math.sin(angle) * len,
   }
-  return marks
 }
 
 const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
   { data, activePulsar, onHover, onClick },
-  ref
+  ref,
 ) {
   const { pulsars, gcAngle } = data
 
-  const maxDist = pulsars.reduce((m, rp) => Math.max(m, rp.dist), 0) || 1
+  // GC line endpoint
+  const gc = endpoint(gcAngle, GC_DIST_PX)
 
-  const gcDx = Math.cos(gcAngle)
-  const gcDy = -Math.sin(gcAngle)
-  const gcX = CENTER + gcDx * GC_LINE_RADIUS
-  const gcY = CENTER + gcDy * GC_LINE_RADIUS
+  // Rotation angle for SVG (degrees, clockwise from horizontal right)
+  // SVG rotate is clockwise, our angles are CCW from right
+  const gcRotDeg = (-gcAngle * 180) / Math.PI
 
   return (
     <svg
       ref={ref}
-      viewBox="0 0 600 600"
-      className="w-full max-w-[600px] aspect-square"
+      viewBox={`0 0 ${VB_W} ${VB_H}`}
+      className="w-full h-full"
+      preserveAspectRatio="xMidYMid meet"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Galactic center reference line */}
-      <line
-        x1={CENTER}
-        y1={CENTER}
-        x2={gcX}
-        y2={gcY}
-        className="stroke-line"
-        strokeWidth={0.75}
-        strokeDasharray="4 4"
-        style={{ transition: TRANSITION }}
-      />
+      {/* Galactic center reference line — longest, no binary */}
+      <g className="stroke-line" strokeWidth={LINE_W}>
+        <line x1={EARTH_X} y1={EARTH_Y} x2={gc.x} y2={gc.y} />
+        {/* GC tick mark at tip — confirms z=0 */}
+        <line
+          x1={gc.x}
+          y1={gc.y - 4}
+          x2={gc.x}
+          y2={gc.y + 4}
+          style={{ transition: TRANSITION }}
+        />
+      </g>
 
       {/* Pulsar lines */}
       {pulsars.map((rp) => {
-        const len = lineLength(rp.dist, maxDist)
-        const dx = Math.cos(rp.angle)
-        const dy = -Math.sin(rp.angle)
-        const x2 = CENTER + dx * len
-        const y2 = CENTER + dy * len
+        const len = distToPixels(rp.dist)
+        const end = endpoint(rp.angle, len)
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
-        const ticks = periodToTicks(rp.pulsar.p0)
+        const binaryStr = periodToBinaryString(rp.pulsar.p0)
+        const strokeClass = isActive ? "stroke-accent" : "stroke-line"
+        const fillClass = isActive ? "fill-accent" : "fill-line"
+        const w = isActive ? LINE_W_ACTIVE : LINE_W
+
+        // SVG rotation: convert math angle to SVG degrees (clockwise)
+        const rotDeg = (-rp.angle * 180) / Math.PI
+
+        // Binary text position: at the endpoint, extending outward along the line
+        const textEnd = endpoint(rp.angle, len + BINARY_OFFSET)
 
         return (
-          <g key={rp.pulsar.name}>
+          <g key={rp.pulsar.name} style={{ transition: TRANSITION }}>
             {/* Invisible hit area */}
             <line
-              x1={CENTER + dx * LINE_START_OFFSET}
-              y1={CENTER + dy * LINE_START_OFFSET}
-              x2={x2}
-              y2={y2}
+              x1={EARTH_X}
+              y1={EARTH_Y}
+              x2={end.x}
+              y2={end.y}
               stroke="transparent"
-              strokeWidth={12}
+              strokeWidth={16}
               className="cursor-pointer"
               onMouseEnter={() => onHover(rp)}
               onMouseLeave={() => onHover(null)}
@@ -114,33 +119,41 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
             />
             {/* Visible line */}
             <line
-              x1={CENTER + dx * LINE_START_OFFSET}
-              y1={CENTER + dy * LINE_START_OFFSET}
-              x2={x2}
-              y2={y2}
-              strokeWidth={isActive ? 1.5 : 1}
-              className={isActive ? "stroke-accent" : "stroke-line"}
-              style={{ transition: TRANSITION, pointerEvents: "none" }}
+              x1={EARTH_X}
+              y1={EARTH_Y}
+              x2={end.x}
+              y2={end.y}
+              strokeWidth={w}
+              className={strokeClass}
+              style={{ pointerEvents: "none" }}
             />
-            {/* Binary tick marks */}
-            <g
-              className={isActive ? "stroke-accent" : "stroke-line"}
-              strokeWidth={0.8}
-              style={{ transition: TRANSITION, pointerEvents: "none" }}
+            {/* Binary period text — rotated to align with line, placed at endpoint */}
+            <text
+              x={textEnd.x}
+              y={textEnd.y}
+              transform={`rotate(${rotDeg}, ${textEnd.x}, ${textEnd.y})`}
+              className={fillClass}
+              style={{
+                fontSize: `${FONT_SIZE}px`,
+                fontFamily: "var(--font-mono)",
+                letterSpacing: "-0.5px",
+                pointerEvents: "none",
+              }}
+              textAnchor="start"
+              dominantBaseline="central"
             >
-              {buildTickMarks(rp.angle, len, ticks)}
-            </g>
+              {binaryStr}
+            </text>
           </g>
         )
       })}
 
-      {/* Center dot */}
+      {/* Earth dot */}
       <circle
-        cx={CENTER}
-        cy={CENTER}
-        r={3}
+        cx={EARTH_X}
+        cy={EARTH_Y}
+        r={EARTH_R}
         className="fill-line stroke-none"
-        style={{ transition: TRANSITION }}
       />
     </svg>
   )

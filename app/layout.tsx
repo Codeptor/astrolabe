@@ -18,7 +18,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
-          value={{ dark: "", light: "light" }}
         >
           {children}
         </ThemeProvider>

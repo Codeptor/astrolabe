@@ -21,21 +21,21 @@ function stabilityLabel(p1: number | null): string {
 
 export function PulsarTooltip({ pulsar }: PulsarTooltipProps) {
   if (!pulsar) {
-    return <div className="h-[60px]" />
+    return <div className="h-[40px]" />
   }
 
   const { pulsar: p, dist } = pulsar
-  const dot = <span className="text-foreground/20"> · </span>
+  const dot = <span className="text-foreground/40"> · </span>
 
   return (
-    <div className="h-[60px] flex flex-col justify-center gap-1">
+    <div className="h-[40px] flex flex-col justify-center gap-1">
       <p
         className="text-[13px] leading-none"
         style={{ fontFamily: "var(--font-display)" }}
       >
         PSR {p.name}
       </p>
-      <p className="text-[10px] text-muted leading-none">
+      <p className="text-[10px] text-foreground/70 leading-none">
         {formatPeriod(p.p0)}
         {dot}
         {dist.toFixed(2)} kpc
