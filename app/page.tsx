@@ -148,7 +148,7 @@ export default function Page() {
           </div>
           <div className="text-[9px] text-foreground/55 text-right leading-relaxed max-w-[230px] hidden sm:block">
             <div>
-              <span className="text-foreground/80">●</span> earth · 14 selected pulsars
+              <span className="text-foreground/80">●</span> observer · 14 selected pulsars
             </div>
             <div>line length = distance (kpc, linear)</div>
             <div>
