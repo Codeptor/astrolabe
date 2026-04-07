@@ -1,9 +1,9 @@
-import React, { forwardRef, useMemo } from "react"
+import React, { forwardRef, useState, useCallback } from "react"
 import type { PlaqueData, RelativePulsar } from "@/lib/types"
 import { periodToTicks } from "@/lib/binary-encoding"
 import { GC_DIST_KPC } from "@/lib/constants"
 
-// Layout: matches reference repo proportions (1200x800 → 900x560)
+// Layout: matches reference repo proportions
 const VB_W = 1000
 const VB_H = 700
 const PAD = 50
@@ -19,11 +19,13 @@ const LINE_W_ACTIVE = 0.5
 const EARTH_R = 2.5
 const TRANSITION = "600ms cubic-bezier(0.16, 1, 0.3, 1)"
 const FONT_SIZE = 7 // for binary text
+const LABEL_FONT_SIZE = 6 // for numeric labels
 const BINARY_OFFSET = 4 // gap between line end and binary text start
 
 interface PlaqueProps {
   data: PlaqueData
   activePulsar: RelativePulsar | null
+  showLabels: boolean
   onHover: (pulsar: RelativePulsar | null) => void
   onClick: (pulsar: RelativePulsar | null) => void
 }
@@ -36,11 +38,16 @@ function distToPixels(distKpc: number): number {
   return Math.min(Math.max(distKpc * PX_PER_KPC, 10), MAX_LINE)
 }
 
-// Convert period to binary string with | and -
 function periodToBinaryString(p0: number): string {
   const ticks = periodToTicks(p0)
   // Pioneer convention: LSB nearest to origin, MSB at tip
   return [...ticks].reverse().map((b) => (b === 1 ? "|" : "-")).join("")
+}
+
+function formatPeriod(p0: number): string {
+  if (p0 < 0.001) return `${(p0 * 1e6).toFixed(1)}µs`
+  if (p0 < 1) return `${(p0 * 1e3).toFixed(2)}ms`
+  return `${p0.toFixed(3)}s`
 }
 
 // Polar to cartesian (angle in radians, SVG y-down)
@@ -51,18 +58,43 @@ function endpoint(angle: number, len: number): { x: number; y: number } {
   }
 }
 
+interface CursorReadout {
+  angleDeg: number // 0..360
+  distKpc: number
+}
+
 const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
-  { data, activePulsar, onHover, onClick },
+  { data, activePulsar, showLabels, onHover, onClick },
   ref,
 ) {
   const { pulsars, gcAngle } = data
+  const [cursor, setCursor] = useState<CursorReadout | null>(null)
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    const local = pt.matrixTransform(ctm.inverse())
+    const dx = local.x - EARTH_X
+    const dy = EARTH_Y - local.y // SVG y-down → math y-up
+    const distPx = Math.sqrt(dx * dx + dy * dy)
+    if (distPx < EARTH_R * 2) {
+      setCursor(null)
+      return
+    }
+    const angleRad = Math.atan2(dy, dx)
+    let angleDeg = (angleRad * 180) / Math.PI
+    if (angleDeg < 0) angleDeg += 360
+    setCursor({ angleDeg, distKpc: distPx / PX_PER_KPC })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => setCursor(null), [])
 
   // GC line endpoint
   const gc = endpoint(gcAngle, GC_DIST_PX)
-
-  // Rotation angle for SVG (degrees, clockwise from horizontal right)
-  // SVG rotate is clockwise, our angles are CCW from right
-  const gcRotDeg = (-gcAngle * 180) / Math.PI
 
   return (
     <svg
@@ -71,6 +103,8 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
       className="w-full h-full"
       preserveAspectRatio="xMidYMid meet"
       xmlns="http://www.w3.org/2000/svg"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Galactic center reference line — longest, no binary */}
       <g className="stroke-line" strokeWidth={LINE_W}>
@@ -111,6 +145,16 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         // Binary text starts after the full smooth line (distance + Z)
         const textEnd = endpoint(rp.angle, totalLen + BINARY_OFFSET)
 
+        // Numeric label position: midpoint of the line, offset perpendicular
+        const labelMid = endpoint(rp.angle, totalLen * 0.5)
+        const perpAngle = rp.angle + Math.PI / 2
+        const labelOffset = 5
+        const labelPos = {
+          x: labelMid.x + Math.cos(perpAngle) * labelOffset,
+          y: labelMid.y - Math.sin(perpAngle) * labelOffset,
+        }
+        const showLabelForThis = showLabels || isActive
+
         return (
           <g key={rp.pulsar.name} style={{ transition: TRANSITION }}>
             {/* Invisible hit area */}
@@ -124,7 +168,10 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               className="cursor-pointer"
               onMouseEnter={() => onHover(rp)}
               onMouseLeave={() => onHover(null)}
-              onClick={() => onClick(isActive ? null : rp)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onClick(isActive ? null : rp)
+              }}
             />
             {/* Visible line: distance + Z-offset as one smooth segment */}
             <line
@@ -153,6 +200,25 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
             >
               {binaryStr}
             </text>
+            {/* Numeric label: PSR name + period */}
+            {showLabelForThis && (
+              <text
+                x={labelPos.x}
+                y={labelPos.y}
+                transform={`rotate(${rotDeg}, ${labelPos.x}, ${labelPos.y})`}
+                className={fillClass}
+                style={{
+                  fontSize: `${LABEL_FONT_SIZE}px`,
+                  fontFamily: "var(--font-mono)",
+                  pointerEvents: "none",
+                  opacity: isActive ? 1 : 0.7,
+                }}
+                textAnchor="middle"
+                dominantBaseline="auto"
+              >
+                {rp.pulsar.name} · {formatPeriod(rp.pulsar.p0)}
+              </text>
+            )}
           </g>
         )
       })}
@@ -164,6 +230,26 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         r={EARTH_R}
         className="fill-line stroke-none"
       />
+
+      {/* Cursor coordinate readout (bottom-right) */}
+      {cursor && (
+        <g style={{ pointerEvents: "none" }}>
+          <text
+            x={VB_W - PAD}
+            y={VB_H - PAD * 0.5}
+            className="fill-foreground"
+            style={{
+              fontSize: "9px",
+              fontFamily: "var(--font-mono)",
+              opacity: 0.7,
+            }}
+            textAnchor="end"
+            dominantBaseline="auto"
+          >
+            θ {cursor.angleDeg.toFixed(0)}° · d {cursor.distKpc.toFixed(2)} kpc
+          </text>
+        </g>
+      )}
     </svg>
   )
 })

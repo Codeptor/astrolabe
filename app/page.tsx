@@ -13,12 +13,25 @@ import { GC_DIST_KPC } from "@/lib/constants"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
 
+function formatPulsarForCopy(rp: RelativePulsar): string {
+  const p = rp.pulsar
+  const period =
+    p.p0 < 0.001
+      ? `${(p.p0 * 1e6).toFixed(2)}µs`
+      : p.p0 < 1
+        ? `${(p.p0 * 1e3).toFixed(3)}ms`
+        : `${p.p0.toFixed(5)}s`
+  return `PSR ${p.name} | P=${period} | d=${rp.dist.toFixed(3)}kpc | l=${rp.gl.toFixed(2)}° b=${rp.gb.toFixed(2)}°`
+}
+
 export default function Page() {
   const [pulsars, setPulsars] = useState<Pulsar[]>([])
   const [stars, setStars] = useState<Star[]>([])
   const [origin, setOrigin] = useState<Star | { name: string; gl: number; gb: number; dist: number; aliases?: string[] }>(SOL)
   const [hoveredPulsar, setHoveredPulsar] = useState<RelativePulsar | null>(null)
   const [lockedPulsar, setLockedPulsar] = useState<RelativePulsar | null>(null)
+  const [showLabels, setShowLabels] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
@@ -62,6 +75,45 @@ export default function Page() {
     [],
   )
 
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    const id = setTimeout(() => setToast(null), 1800)
+    return () => clearTimeout(id)
+  }, [])
+
+  const handlePulsarClick = useCallback(
+    (rp: RelativePulsar | null) => {
+      if (!rp) {
+        setLockedPulsar(null)
+        return
+      }
+      setLockedPulsar(rp)
+      const text = formatPulsarForCopy(rp)
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(
+          () => showToast("copied to clipboard"),
+          () => showToast("copy failed"),
+        )
+      }
+    },
+    [showToast],
+  )
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === "INPUT") return
+      if (e.key === "Escape") {
+        setLockedPulsar(null)
+        setOrigin(SOL)
+      } else if (e.key === "l" || e.key === "L") {
+        setShowLabels((v) => !v)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
   if (pulsars.length === 0) {
     return (
       <div className="flex min-h-svh items-center justify-center">
@@ -81,7 +133,7 @@ export default function Page() {
       <header className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4 flex items-start justify-between z-50">
         <div className="flex flex-col gap-1">
           <span className="text-[11px] text-foreground">astrolabe</span>
-          <div className="w-[200px]">
+          <div className="w-[240px]">
             <StarSearch stars={stars} selected={origin} onSelect={handleOriginChange} />
           </div>
         </div>
@@ -95,27 +147,47 @@ export default function Page() {
           </div>
         )}
         <div className="flex items-center gap-3 pt-0.5">
+          <button
+            type="button"
+            onClick={() => setShowLabels((v) => !v)}
+            className="text-[10px] text-foreground/70 hover:text-foreground transition cursor-pointer"
+            title="Toggle pulsar labels (L)"
+          >
+            {showLabels ? "labels on" : "labels"}
+          </button>
           <ThemeToggle />
           <ExportButton svgRef={svgRef} starName={origin.name} />
         </div>
       </header>
 
       {/* Plaque */}
-      <main className="flex-1 min-h-0 flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
+      <main className="flex-1 min-h-0 flex items-center justify-center px-4 relative" onClick={(e) => e.stopPropagation()}>
         {plaqueData && (
           <Plaque
             ref={svgRef}
             data={plaqueData}
             activePulsar={activePulsar}
+            showLabels={showLabels}
             onHover={setHoveredPulsar}
-            onClick={setLockedPulsar}
+            onClick={handlePulsarClick}
           />
+        )}
+        {toast && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-foreground/10 backdrop-blur px-3 py-1 text-[10px] text-foreground border border-foreground/20 pointer-events-none">
+            {toast}
+          </div>
         )}
       </main>
 
       {/* Footer */}
       <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between">
-        <div className="h-[40px] flex-1">
+        <div
+          className="h-[40px] flex-1 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (activePulsar) handlePulsarClick(activePulsar)
+          }}
+        >
           <PulsarTooltip pulsar={activePulsar} />
         </div>
         <p className="text-[9px] text-foreground/50 shrink-0">

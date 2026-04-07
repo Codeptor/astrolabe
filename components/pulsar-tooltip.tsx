@@ -24,7 +24,7 @@ export function PulsarTooltip({ pulsar }: PulsarTooltipProps) {
     return <div className="h-[40px]" />
   }
 
-  const { pulsar: p, dist } = pulsar
+  const { pulsar: p, dist, gl, gb } = pulsar
   const dot = <span className="text-foreground/40"> · </span>
 
   return (
@@ -34,11 +34,14 @@ export function PulsarTooltip({ pulsar }: PulsarTooltipProps) {
         style={{ fontFamily: "var(--font-display)" }}
       >
         PSR {p.name}
+        <span className="text-foreground/30 text-[9px] ml-2">click to copy</span>
       </p>
       <p className="text-[10px] text-foreground/70 leading-none">
         {formatPeriod(p.p0)}
         {dot}
         {dist.toFixed(2)} kpc
+        {dot}
+        l {gl.toFixed(1)}° b {gb.toFixed(1)}°
         {dot}
         {stabilityLabel(p.p1)}
       </p>
