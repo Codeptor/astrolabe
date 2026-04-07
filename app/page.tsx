@@ -30,7 +30,6 @@ export default function Page() {
   const [origin, setOrigin] = useState<Star | { name: string; gl: number; gb: number; dist: number; aliases?: string[] }>(SOL)
   const [hoveredPulsar, setHoveredPulsar] = useState<RelativePulsar | null>(null)
   const [lockedPulsar, setLockedPulsar] = useState<RelativePulsar | null>(null)
-  const [showLabels, setShowLabels] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -81,17 +80,16 @@ export default function Page() {
     return () => clearTimeout(id)
   }, [])
 
-  const handlePulsarClick = useCallback(
-    (rp: RelativePulsar | null) => {
-      if (!rp) {
-        setLockedPulsar(null)
-        return
-      }
-      setLockedPulsar(rp)
+  const handlePulsarSelect = useCallback((rp: RelativePulsar | null) => {
+    setLockedPulsar(rp)
+  }, [])
+
+  const handlePulsarCopy = useCallback(
+    (rp: RelativePulsar) => {
       const text = formatPulsarForCopy(rp)
       if (typeof navigator !== "undefined" && navigator.clipboard) {
         navigator.clipboard.writeText(text).then(
-          () => showToast("copied to clipboard"),
+          () => showToast("copied"),
           () => showToast("copy failed"),
         )
       }
@@ -106,8 +104,6 @@ export default function Page() {
       if (e.key === "Escape") {
         setLockedPulsar(null)
         setOrigin(SOL)
-      } else if (e.key === "l" || e.key === "L") {
-        setShowLabels((v) => !v)
       } else if (e.key === "r" || e.key === "R") {
         if (stars.length === 0) return
         const pool = stars.filter((s) => s.name !== "Sol" && s.name !== origin.name)
@@ -154,14 +150,6 @@ export default function Page() {
           </div>
         )}
         <div className="flex items-center gap-3 pt-0.5">
-          <button
-            type="button"
-            onClick={() => setShowLabels((v) => !v)}
-            className="text-[10px] text-foreground/70 hover:text-foreground transition cursor-pointer"
-            title="Toggle pulsar labels (L)"
-          >
-            {showLabels ? "labels on" : "labels"}
-          </button>
           <ThemeToggle />
           <ExportButton svgRef={svgRef} starName={origin.name} />
         </div>
@@ -174,9 +162,8 @@ export default function Page() {
             ref={svgRef}
             data={plaqueData}
             activePulsar={activePulsar}
-            showLabels={showLabels}
             onHover={setHoveredPulsar}
-            onClick={handlePulsarClick}
+            onClick={handlePulsarSelect}
           />
         )}
         {toast && (
@@ -189,10 +176,10 @@ export default function Page() {
       {/* Footer */}
       <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between">
         <div
-          className="h-[40px] flex-1 cursor-pointer"
+          className={`h-[40px] flex-1 ${activePulsar ? "cursor-pointer" : ""}`}
           onClick={(e) => {
             e.stopPropagation()
-            if (activePulsar) handlePulsarClick(activePulsar)
+            if (activePulsar) handlePulsarCopy(activePulsar)
           }}
         >
           <PulsarTooltip pulsar={activePulsar} />

@@ -19,13 +19,11 @@ const LINE_W_ACTIVE = 0.5
 const EARTH_R = 2.5
 const TRANSITION = "600ms cubic-bezier(0.16, 1, 0.3, 1)"
 const FONT_SIZE = 7 // for binary text
-const LABEL_FONT_SIZE = 6 // for numeric labels
 const BINARY_OFFSET = 4 // gap between line end and binary text start
 
 interface PlaqueProps {
   data: PlaqueData
   activePulsar: RelativePulsar | null
-  showLabels: boolean
   onHover: (pulsar: RelativePulsar | null) => void
   onClick: (pulsar: RelativePulsar | null) => void
 }
@@ -44,12 +42,6 @@ function periodToBinaryString(p0: number): string {
   return [...ticks].reverse().map((b) => (b === 1 ? "|" : "-")).join("")
 }
 
-function formatPeriod(p0: number): string {
-  if (p0 < 0.001) return `${(p0 * 1e6).toFixed(1)}µs`
-  if (p0 < 1) return `${(p0 * 1e3).toFixed(2)}ms`
-  return `${p0.toFixed(3)}s`
-}
-
 // Polar to cartesian (angle in radians, SVG y-down)
 function endpoint(angle: number, len: number): { x: number; y: number } {
   return {
@@ -64,7 +56,7 @@ interface CursorReadout {
 }
 
 const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
-  { data, activePulsar, showLabels, onHover, onClick },
+  { data, activePulsar, onHover, onClick },
   ref,
 ) {
   const { pulsars, gcAngle } = data
@@ -91,7 +83,10 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
     setCursor({ angleDeg, distKpc: distPx / PX_PER_KPC })
   }, [])
 
-  const handleMouseLeave = useCallback(() => setCursor(null), [])
+  const handleMouseLeave = useCallback(() => {
+    setCursor(null)
+    onHover(null)
+  }, [onHover])
 
   // GC line endpoint
   const gc = endpoint(gcAngle, GC_DIST_PX)
@@ -145,19 +140,9 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         // Binary text starts after the full smooth line (distance + Z)
         const textEnd = endpoint(rp.angle, totalLen + BINARY_OFFSET)
 
-        // Numeric label position: midpoint of the line, offset perpendicular
-        const labelMid = endpoint(rp.angle, totalLen * 0.5)
-        const perpAngle = rp.angle + Math.PI / 2
-        const labelOffset = 5
-        const labelPos = {
-          x: labelMid.x + Math.cos(perpAngle) * labelOffset,
-          y: labelMid.y - Math.sin(perpAngle) * labelOffset,
-        }
-        const showLabelForThis = showLabels || isActive
-
         return (
           <g key={rp.pulsar.name} style={{ transition: TRANSITION }}>
-            {/* Invisible hit area */}
+            {/* Invisible hit area — hover persists until SVG mouse leave */}
             <line
               x1={EARTH_X}
               y1={EARTH_Y}
@@ -167,7 +152,6 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               strokeWidth={16}
               className="cursor-pointer"
               onMouseEnter={() => onHover(rp)}
-              onMouseLeave={() => onHover(null)}
               onClick={(e) => {
                 e.stopPropagation()
                 onClick(isActive ? null : rp)
@@ -200,25 +184,6 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
             >
               {binaryStr}
             </text>
-            {/* Numeric label: PSR name + period */}
-            {showLabelForThis && (
-              <text
-                x={labelPos.x}
-                y={labelPos.y}
-                transform={`rotate(${rotDeg}, ${labelPos.x}, ${labelPos.y})`}
-                className={fillClass}
-                style={{
-                  fontSize: `${LABEL_FONT_SIZE}px`,
-                  fontFamily: "var(--font-mono)",
-                  pointerEvents: "none",
-                  opacity: isActive ? 1 : 0.7,
-                }}
-                textAnchor="middle"
-                dominantBaseline="auto"
-              >
-                {rp.pulsar.name} · {formatPeriod(rp.pulsar.p0)}
-              </text>
-            )}
           </g>
         )
       })}
