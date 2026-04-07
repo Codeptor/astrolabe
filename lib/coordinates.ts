@@ -9,6 +9,7 @@ const SIN_DEC_NGP = Math.sin(DEC_NGP)
 const COS_DEC_NGP = Math.cos(DEC_NGP)
 
 import type { Vec3 } from "./types"
+import { GC_DIST_KPC } from "./constants"
 
 export function raDecToGalactic(raDeg: number, decDeg: number): { gl: number; gb: number } {
   const ra = raDeg * DEG
@@ -24,7 +25,10 @@ export function raDecToGalactic(raDeg: number, decDeg: number): { gl: number; gb
   const x = sinDec * COS_DEC_NGP - cosDec * SIN_DEC_NGP * Math.cos(dRa)
   let gl = (L_NCP - Math.atan2(y, x)) * RAD
   gl = ((gl % 360) + 360) % 360
-  // Fold the ~360=0 boundary: values in [359.5, 360) map to (-0.5, 0]
+  // Fold near-360 values to prevent discontinuity at the 0°/360° boundary.
+  // Values in [359.5, 360) are astronomically equivalent to (-0.5, 0].
+  // 359.5 chosen because no catalogued source sits in this sliver,
+  // and the galactic center (l≈0°) must not alias to l≈360°.
   if (gl >= 359.5) gl -= 360
 
   return { gl, gb: gb * RAD }
@@ -71,10 +75,8 @@ export function angularSeparation(
   return Math.acos(Math.min(1, Math.max(-1, cosAngle))) * RAD
 }
 
-const GC_DIST = 8.178
-
 export function galacticCenterAngle(observer: { gl: number; gb: number; dist: number }): number {
-  const gc = relativePosition(observer, { gl: 0, gb: 0, dist: GC_DIST })
+  const gc = relativePosition(observer, { gl: 0, gb: 0, dist: GC_DIST_KPC })
   return Math.atan2(
     Math.sin(gc.gl * DEG) * Math.cos(gc.gb * DEG),
     Math.cos(gc.gl * DEG) * Math.cos(gc.gb * DEG),

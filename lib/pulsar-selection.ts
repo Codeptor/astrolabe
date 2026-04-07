@@ -6,7 +6,7 @@ const DEG = Math.PI / 180
 // Characteristic age: τ = P / (2 * |P-dot|)
 // Standard pulsar physics — higher = more stable/long-lived
 function characteristicAge(p0: number, p1: number | null): number {
-  if (p1 === null || p1 === 0) return 1e12 // unknown P-dot → assume stable
+  if (p1 === null || p1 === 0) return 1e8 // unknown P-dot → penalize, not assume stable
   return p0 / (2 * Math.abs(p1))
 }
 
@@ -130,9 +130,22 @@ export function selectPulsars(
     candidates.push({ pulsar: p, rel, unitVec, quality })
   }
 
-  // Step 2: Pre-filter to top ~200 candidates by quality (avoid O(n^2) on full catalogue)
+  // Step 2: Pre-filter by quality + inject geometrically unique candidates
   candidates.sort((a, b) => b.quality - a.quality)
   const pool = candidates.slice(0, 200)
+
+  // Inject candidates beyond top 200 that fill angular gaps (>30° from all pool members)
+  // Prevents filtering out geometrically critical pulsars with lower quality scores
+  for (const c of candidates.slice(200, 500)) {
+    let tooClose = false
+    for (const p of pool) {
+      const dot = Math.abs(
+        c.unitVec.x * p.unitVec.x + c.unitVec.y * p.unitVec.y + c.unitVec.z * p.unitVec.z,
+      )
+      if (dot >= 0.866) { tooClose = true; break } // cos(30°) ≈ 0.866
+    }
+    if (!tooClose) pool.push(c)
+  }
 
   // Step 3: Greedy PDOP-optimized selection
   // At each step, pick the candidate that minimizes PDOP of the growing set

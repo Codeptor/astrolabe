@@ -117,6 +117,8 @@ interface RawRecord {
   F0?: string;
   F1?: string;
   DIST_DM?: string;
+  DIST1?: string;
+  PX?: string;
 }
 
 function parseDatabase(text: string): RawRecord[] {
@@ -160,6 +162,12 @@ function parseDatabase(text: string): RawRecord[] {
           break;
         case "DIST_DM":
           if (!record.DIST_DM) record.DIST_DM = value;
+          break;
+        case "DIST1":
+          if (!record.DIST1) record.DIST1 = value;
+          break;
+        case "PX":
+          if (!record.PX) record.PX = value;
           break;
       }
     }
@@ -214,21 +222,24 @@ for (const r of records) {
     }
   }
 
-  // Filter: must have all required fields
-  if (
-    !r.PSRJ ||
-    !r.RAJ ||
-    !r.DECJ ||
-    p0 === null ||
-    isNaN(p0) ||
-    r.DIST_DM === undefined
-  ) {
-    skipped++;
-    continue;
+  // Resolve distance: prefer DIST1 (best estimate, may include parallax),
+  // fall back to DIST_DM (DM-derived), then PX (raw parallax)
+  let dist: number | null = null;
+  if (r.DIST1 !== undefined) {
+    const d = parseFloat(r.DIST1);
+    if (!isNaN(d) && d > 0) dist = d;
+  }
+  if (dist === null && r.DIST_DM !== undefined) {
+    const d = parseFloat(r.DIST_DM);
+    if (!isNaN(d) && d > 0) dist = d;
+  }
+  if (dist === null && r.PX !== undefined) {
+    const px = parseFloat(r.PX);
+    if (!isNaN(px) && px > 0) dist = 1 / px; // parallax mas → distance kpc
   }
 
-  const dist = parseFloat(r.DIST_DM);
-  if (isNaN(dist)) {
+  // Filter: must have all required fields
+  if (!r.PSRJ || !r.RAJ || !r.DECJ || p0 === null || isNaN(p0) || dist === null) {
     skipped++;
     continue;
   }

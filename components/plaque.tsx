@@ -1,6 +1,7 @@
 import React, { forwardRef, useMemo } from "react"
 import type { PlaqueData, RelativePulsar } from "@/lib/types"
 import { periodToTicks } from "@/lib/binary-encoding"
+import { GC_DIST_KPC } from "@/lib/constants"
 
 // Layout: matches reference repo proportions (1200x800 → 900x560)
 const VB_W = 1000
@@ -10,7 +11,7 @@ const EARTH_X = Math.round(VB_W * 0.35) // origin ~1/3 from left
 const EARTH_Y = VB_H / 2
 const GC_X = VB_W - PAD // galactic center marker at right edge
 const GC_DIST_PX = GC_X - EARTH_X // pixel length = scale reference
-const GC_DIST_KPC = 8.178
+const DEG = Math.PI / 180
 
 // Visual params
 const LINE_W = 0.3
@@ -27,21 +28,19 @@ interface PlaqueProps {
   onClick: (pulsar: RelativePulsar | null) => void
 }
 
-// Convert pulsar distance to pixel length — sqrt scaling for visual spread
-// Capped so lines + binary text stay within viewBox
-const MAX_LINE = Math.min(EARTH_Y - PAD, EARTH_X - PAD) * 0.85 // max reach in any direction
+// Linear scaling: pixels per kpc, same scale as GC reference line
+const PX_PER_KPC = GC_DIST_PX / GC_DIST_KPC
+const MAX_LINE = Math.min(EARTH_Y - PAD, EARTH_X - PAD) * 0.85
 
 function distToPixels(distKpc: number): number {
-  const ratio = distKpc / GC_DIST_KPC
-  return Math.min(Math.max(Math.sqrt(ratio) * GC_DIST_PX, 10), MAX_LINE)
+  return Math.min(Math.max(distKpc * PX_PER_KPC, 10), MAX_LINE)
 }
 
 // Convert period to binary string with | and -
 function periodToBinaryString(p0: number): string {
   const ticks = periodToTicks(p0)
-  // Show up to 20 most significant bits
-  const display = ticks.slice(0, 20)
-  return display.map((b) => (b === 1 ? "|" : "-")).join("")
+  // Pioneer convention: LSB nearest to origin, MSB at tip
+  return [...ticks].reverse().map((b) => (b === 1 ? "|" : "-")).join("")
 }
 
 // Polar to cartesian (angle in radians, SVG y-down)
@@ -88,8 +87,18 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
 
       {/* Pulsar lines */}
       {pulsars.map((rp) => {
-        const len = distToPixels(rp.dist)
-        const end = endpoint(rp.angle, len)
+        // Three-part line structure (Pioneer convention, reading outward):
+        //   1. Smooth line: projected distance in galactic plane
+        //   2. Smooth segment: Z-offset (height above/below plane)
+        //   3. Binary text: period encoding (| and -)
+        const projDistKpc = rp.dist * Math.cos(rp.gb * DEG)
+        const zKpc = Math.abs(rp.dist * Math.sin(rp.gb * DEG))
+
+        const distPx = distToPixels(projDistKpc)
+        const zPx = Math.min(zKpc * PX_PER_KPC, MAX_LINE * 0.3)
+        const totalLen = Math.min(distPx + zPx, MAX_LINE)
+
+        const end = endpoint(rp.angle, totalLen)
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
         const binaryStr = periodToBinaryString(rp.pulsar.p0)
         const strokeClass = isActive ? "stroke-accent" : "stroke-line"
@@ -99,8 +108,8 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         // SVG rotation: convert math angle to SVG degrees (clockwise)
         const rotDeg = (-rp.angle * 180) / Math.PI
 
-        // Binary text position: at the endpoint, extending outward along the line
-        const textEnd = endpoint(rp.angle, len + BINARY_OFFSET)
+        // Binary text starts after the full smooth line (distance + Z)
+        const textEnd = endpoint(rp.angle, totalLen + BINARY_OFFSET)
 
         return (
           <g key={rp.pulsar.name} style={{ transition: TRANSITION }}>
@@ -117,7 +126,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               onMouseLeave={() => onHover(null)}
               onClick={() => onClick(isActive ? null : rp)}
             />
-            {/* Visible line */}
+            {/* Visible line: distance + Z-offset as one smooth segment */}
             <line
               x1={EARTH_X}
               y1={EARTH_Y}
@@ -127,7 +136,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               className={strokeClass}
               style={{ pointerEvents: "none" }}
             />
-            {/* Binary period text — rotated to align with line, placed at endpoint */}
+            {/* Binary period text — rotated to align with line */}
             <text
               x={textEnd.x}
               y={textEnd.y}

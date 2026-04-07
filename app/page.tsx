@@ -9,9 +9,9 @@ import { StarSearch } from "@/components/star-search"
 import { PulsarTooltip } from "@/components/pulsar-tooltip"
 import { ExportButton } from "@/components/export-button"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { GC_DIST_KPC } from "@/lib/constants"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
-const GC_DIST = 8.178
 
 export default function Page() {
   const [pulsars, setPulsars] = useState<Pulsar[]>([])
@@ -47,7 +47,7 @@ export default function Page() {
     const ox = o.dist * Math.cos(bRad) * Math.cos(lRad)
     const oy = o.dist * Math.cos(bRad) * Math.sin(lRad)
     const oz = o.dist * Math.sin(bRad)
-    const dx = GC_DIST - ox
+    const dx = GC_DIST_KPC - ox
     const dy = 0 - oy
     const dz = 0 - oz
     return Math.sqrt(dx * dx + dy * dy + dz * dz)
