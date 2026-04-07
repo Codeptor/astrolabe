@@ -85,8 +85,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
 
   const handleMouseLeave = useCallback(() => {
     setCursor(null)
-    onHover(null)
-  }, [onHover])
+  }, [])
 
   // GC line endpoint
   const gc = endpoint(gcAngle, GC_DIST_PX)

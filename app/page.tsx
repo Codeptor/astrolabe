@@ -130,7 +130,10 @@ export default function Page() {
   return (
     <div
       className="flex h-svh flex-col overflow-hidden"
-      onClick={() => setLockedPulsar(null)}
+      onClick={() => {
+        setLockedPulsar(null)
+        setHoveredPulsar(null)
+      }}
     >
       {/* Header */}
       <header className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4 flex items-start justify-between z-50">
