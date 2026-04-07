@@ -88,6 +88,7 @@
   { "name": "Sadr", "gl": 78.15, "gb": 1.87, "dist": 0.56000, "aliases": ["Gamma Cygni"] },
   { "name": "Deneb", "gl": 84.22, "gb": -6.87, "dist": 0.80200, "aliases": ["Alpha Cygni"] },
   { "name": "VY Canis Majoris", "gl": 239.35, "gb": -5.06, "dist": 1.14000, "aliases": ["VY CMa"] },
+  { "name": "Stephenson 2-18", "gl": 26.217, "gb": -0.064, "dist": 5.80000, "aliases": ["St2-18", "Stephenson 2 DFK 1", "RSGC2-18", "2MASS J18392253-0600084"] },
   { "name": "VV Cephei", "gl": 108.92, "gb": -1.46, "dist": 1.50000, "aliases": [] },
   { "name": "Cygnus X-1", "gl": 71.33, "gb": 3.07, "dist": 2.22000, "aliases": ["HDE 226868"] },
   { "name": "Eta Carinae", "gl": 287.60, "gb": -0.63, "dist": 2.30000, "aliases": [] },
