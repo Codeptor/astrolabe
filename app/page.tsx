@@ -141,9 +141,27 @@ export default function Page() {
             <span>{distToGC.toFixed(1)} kpc</span>
           </div>
         )}
-        <div className="flex items-center gap-3 pt-0.5">
-          <ThemeToggle />
-          <ExportButton svgRef={svgRef} starName={origin.name} />
+        <div className="flex flex-col items-end gap-2 pt-0.5">
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <ExportButton svgRef={svgRef} starName={origin.name} />
+          </div>
+          <div className="text-[9px] text-foreground/55 text-right leading-relaxed max-w-[230px] hidden sm:block">
+            <div>
+              <span className="text-foreground/80">●</span> earth · 14 selected pulsars
+            </div>
+            <div>line length = distance (kpc, linear)</div>
+            <div>
+              <span className="font-mono text-foreground/80">| −</span> period bits in hydrogen units
+            </div>
+            <div>
+              <span className="text-foreground/80">→</span> fixed line = direction to GC
+            </div>
+            <div className="text-foreground/40 pt-1">
+              hover · click to lock · click tooltip to copy
+            </div>
+            <div className="text-foreground/40">/ search · R random · Esc reset</div>
+          </div>
         </div>
       </header>
 
