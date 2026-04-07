@@ -108,11 +108,18 @@ export default function Page() {
         setOrigin(SOL)
       } else if (e.key === "l" || e.key === "L") {
         setShowLabels((v) => !v)
+      } else if (e.key === "r" || e.key === "R") {
+        if (stars.length === 0) return
+        const pool = stars.filter((s) => s.name !== "Sol" && s.name !== origin.name)
+        if (pool.length === 0) return
+        const pick = pool[Math.floor(Math.random() * pool.length)]!
+        handleOriginChange(pick)
+        showToast(`→ ${pick.name}`)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [])
+  }, [stars, origin.name, handleOriginChange, showToast])
 
   if (pulsars.length === 0) {
     return (
