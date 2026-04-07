@@ -1,6 +1,8 @@
 import { raDecToGalactic } from "./coordinates"
 
-const SIMBAD_TAP = "https://simbad.cds.unistra.fr/simbad/sim-tap/sync"
+// CDS Sesame name resolver — handles case-insensitive identifier lookup
+// across SIMBAD with built-in name normalization.
+const SESAME_URL = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S"
 
 export interface ResolvedStar {
   name: string
@@ -10,66 +12,53 @@ export interface ResolvedStar {
   source: "simbad"
 }
 
-interface TapResponse {
-  metadata?: { name: string }[]
-  data?: (string | number | null)[][]
-}
-
 /**
- * Resolve a star name via SIMBAD TAP service.
- * Returns null if not found or if no parallax is available.
+ * Resolve a star name via the CDS Sesame service (SIMBAD only).
+ * Returns null if not found, or if parallax is missing/unreliable.
  */
 export async function resolveStar(name: string): Promise<ResolvedStar | null> {
-  // Escape single quotes for ADQL string literal
-  const safe = name.replace(/'/g, "''").trim()
-  if (!safe) return null
-
-  const query = `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value
-FROM basic AS b
-JOIN ident AS i ON b.oid = i.oidref
-WHERE UPPER(i.id) = UPPER('${safe}')`
-
-  const params = new URLSearchParams({
-    request: "doQuery",
-    lang: "ADQL",
-    format: "json",
-    query,
-  })
+  const trimmed = name.trim()
+  if (!trimmed) return null
 
   let response: Response
   try {
-    response = await fetch(`${SIMBAD_TAP}?${params}`, {
-      headers: { Accept: "application/json" },
-      // Cache successful resolutions on the edge for 24h
+    response = await fetch(`${SESAME_URL}?${encodeURIComponent(trimmed)}`, {
+      headers: { Accept: "text/plain" },
       next: { revalidate: 86400 },
     })
   } catch {
     return null
   }
-
   if (!response.ok) return null
 
-  let json: TapResponse
-  try {
-    json = await response.json()
-  } catch {
-    return null
-  }
+  const text = await response.text()
 
-  const row = json.data?.[0]
-  if (!row || row.length < 4) return null
+  // Sesame uses #=Sc=Simbad to indicate a successful SIMBAD resolution,
+  // and #!Sc= to indicate failure. Bail on anything else.
+  if (!text.includes("#=Sc=Simbad")) return null
 
-  const mainId = String(row[0] ?? name).trim()
-  const ra = typeof row[1] === "number" ? row[1] : parseFloat(String(row[1]))
-  const dec = typeof row[2] === "number" ? row[2] : parseFloat(String(row[2]))
-  const plxMas =
-    row[3] === null ? null : typeof row[3] === "number" ? row[3] : parseFloat(String(row[3]))
+  // %J <ra> <dec> = ...   — J2000 coordinates in degrees
+  const jMatch = text.match(/^%J\s+([-\d.]+)\s+([+-]?[\d.]+)/m)
+  if (!jMatch) return null
+  const ra = parseFloat(jMatch[1]!)
+  const dec = parseFloat(jMatch[2]!)
+  if (!Number.isFinite(ra) || !Number.isFinite(dec)) return null
 
-  if (isNaN(ra) || isNaN(dec)) return null
-  if (plxMas === null || isNaN(plxMas) || plxMas <= 0) return null
+  // %X <plx> [<err>]  — parallax in mas
+  const xMatch = text.match(/^%X\s+([-\d.]+)(?:\s+\[([-\d.]+)\])?/m)
+  if (!xMatch) return null
+  const plx = parseFloat(xMatch[1]!)
+  const plxErr = xMatch[2] ? parseFloat(xMatch[2]) : 0
+  if (!Number.isFinite(plx) || plx <= 0) return null
+  // Reject parallax with poor signal-to-noise (<3σ) — distance would be unreliable
+  if (Number.isFinite(plxErr) && plxErr > 0 && plx / plxErr < 3) return null
 
+  // %I.0 <main_id>  — canonical SIMBAD name
+  const iMatch = text.match(/^%I\.0\s+(.+?)\s*$/m)
+  const mainId = iMatch ? iMatch[1]!.trim() : trimmed
+
+  const dist = 1 / plx // mas → kpc
   const { gl, gb } = raDecToGalactic(ra, dec)
-  const dist = 1 / plxMas // mas → kpc
 
   return {
     name: mainId,
