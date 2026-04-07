@@ -82,3 +82,11 @@ export function galacticCenterAngle(observer: { gl: number; gb: number; dist: nu
     Math.cos(gc.gl * DEG) * Math.cos(gc.gb * DEG),
   )
 }
+
+export function galacticCenterDistance(observer: { gl: number; gb: number; dist: number }): number {
+  const o = galacticToCartesian(observer.gl, observer.gb, observer.dist)
+  const dx = GC_DIST_KPC - o.x
+  const dy = -o.y
+  const dz = -o.z
+  return Math.sqrt(dx * dx + dy * dy + dz * dz)
+}

@@ -3,13 +3,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import type { Pulsar, Star, RelativePulsar, PlaqueData } from "@/lib/types"
 import { selectPulsars } from "@/lib/pulsar-selection"
-import { galacticCenterAngle } from "@/lib/coordinates"
+import { galacticCenterAngle, galacticCenterDistance } from "@/lib/coordinates"
 import Plaque from "@/components/plaque"
 import { StarSearch } from "@/components/star-search"
 import { PulsarTooltip } from "@/components/pulsar-tooltip"
 import { ExportButton } from "@/components/export-button"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { GC_DIST_KPC } from "@/lib/constants"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
 
@@ -47,23 +46,13 @@ export default function Page() {
     if (pulsars.length === 0) return null
     const selected = selectPulsars(pulsars, origin)
     const gcAngle = galacticCenterAngle(origin)
-    return { origin, pulsars: selected, gcAngle }
+    const gcDist = galacticCenterDistance(origin)
+    return { origin, pulsars: selected, gcAngle, gcDist }
   }, [pulsars, origin])
 
   const activePulsar = lockedPulsar ?? hoveredPulsar
 
-  const distToGC = useMemo(() => {
-    const o = origin
-    const lRad = o.gl * (Math.PI / 180)
-    const bRad = o.gb * (Math.PI / 180)
-    const ox = o.dist * Math.cos(bRad) * Math.cos(lRad)
-    const oy = o.dist * Math.cos(bRad) * Math.sin(lRad)
-    const oz = o.dist * Math.sin(bRad)
-    const dx = GC_DIST_KPC - ox
-    const dy = 0 - oy
-    const dz = 0 - oz
-    return Math.sqrt(dx * dx + dy * dy + dz * dz)
-  }, [origin])
+  const distToGC = plaqueData?.gcDist ?? 0
 
   const handleOriginChange = useCallback(
     (star: Star | { name: string; gl: number; gb: number; dist: number; aliases?: string[] }) => {

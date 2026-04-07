@@ -34,4 +34,5 @@ export interface PlaqueData {
   origin: Star | { name: string; gl: number; gb: number; dist: number }
   pulsars: RelativePulsar[]
   gcAngle: number // angle to galactic center from observer (radians)
+  gcDist: number  // distance to galactic center from observer (kpc)
 }

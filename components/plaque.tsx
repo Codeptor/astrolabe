@@ -87,8 +87,11 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
     setCursor(null)
   }, [])
 
-  // GC line endpoint
-  const gc = endpoint(gcAngle, GC_DIST_PX)
+  // GC reference line is invariant: always points right (angle 0) at the
+  // full reference length. Pulsar angles are rotated by -gcAngle below so
+  // they sit in a frame where the GC is the fixed anchor — when the origin
+  // changes, the GC line stays put and only the pulsar pattern changes.
+  const gc = endpoint(0, GC_DIST_PX)
 
   return (
     <svg
@@ -126,7 +129,10 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         const zPx = Math.min(zKpc * PX_PER_KPC, MAX_LINE * 0.3)
         const totalLen = Math.min(distPx + zPx, MAX_LINE)
 
-        const end = endpoint(rp.angle, totalLen)
+        // Rotate into the frame where the GC is fixed at angle 0
+        const renderAngle = rp.angle - gcAngle
+
+        const end = endpoint(renderAngle, totalLen)
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
         const binaryStr = periodToBinaryString(rp.pulsar.p0)
         const strokeClass = isActive ? "stroke-accent" : "stroke-line"
@@ -134,10 +140,10 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         const w = isActive ? LINE_W_ACTIVE : LINE_W
 
         // SVG rotation: convert math angle to SVG degrees (clockwise)
-        const rotDeg = (-rp.angle * 180) / Math.PI
+        const rotDeg = (-renderAngle * 180) / Math.PI
 
         // Binary text starts after the full smooth line (distance + Z)
-        const textEnd = endpoint(rp.angle, totalLen + BINARY_OFFSET)
+        const textEnd = endpoint(renderAngle, totalLen + BINARY_OFFSET)
 
         return (
           <g key={rp.pulsar.name} style={{ transition: TRANSITION }}>
