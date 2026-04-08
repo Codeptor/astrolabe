@@ -1,6 +1,8 @@
 "use client"
 
 import type React from "react"
+import type { Theme } from "@/lib/state"
+import { themeColors } from "@/lib/presets"
 
 // ViewBox dimensions must match plaque.tsx
 const VB_W = 1000
@@ -9,24 +11,41 @@ const VB_H = 700
 interface ExportButtonProps {
   svgRef: React.RefObject<SVGSVGElement | null>
   starName: string
+  theme: Theme
+  observerName: string
+  pulsarCount: number
+  onToast: (msg: string) => void
 }
 
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 }
 
-function getColors(isLight: boolean) {
-  return isLight
-    ? { fg: "#1a1a1a", bg: "#fafafa" }
-    : { fg: "#e0e0e0", bg: "#0a0a10" }
+async function fontToDataUrl(path: string, mime: string): Promise<string> {
+  try {
+    const res = await fetch(path)
+    const buf = await res.arrayBuffer()
+    let bin = ""
+    const bytes = new Uint8Array(buf)
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!)
+    const base64 = btoa(bin)
+    return `data:${mime};base64,${base64}`
+  } catch {
+    return path
+  }
 }
 
-function buildInlineStyle(isLight: boolean, fontUrl: string): string {
-  const { fg } = getColors(isLight)
+function buildInlineStyle(fg: string, tronicaUrl: string, assetUrl: string): string {
   return `
     @font-face {
       font-family: "Tronica Mono";
-      src: url("${fontUrl}") format("woff2");
+      src: url("${tronicaUrl}") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: "Asset";
+      src: url("${assetUrl}") format("truetype");
       font-weight: 400;
       font-style: normal;
     }
@@ -37,47 +56,38 @@ function buildInlineStyle(isLight: boolean, fontUrl: string): string {
   `
 }
 
-async function fontToDataUrl(): Promise<string> {
-  try {
-    const res = await fetch("/fonts/TronicaMono-Regular.woff2")
-    const buf = await res.arrayBuffer()
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-    return `data:font/woff2;base64,${base64}`
-  } catch {
-    return "/fonts/TronicaMono-Regular.woff2"
-  }
-}
-
-function cloneForExport(svgEl: SVGSVGElement, inlineStyle: string, bg: string): SVGSVGElement {
+function cloneForExport(
+  svgEl: SVGSVGElement,
+  inlineStyle: string,
+  bg: string,
+  width: number,
+  height: number,
+): SVGSVGElement {
   const clone = svgEl.cloneNode(true) as SVGSVGElement
 
-  // Set explicit viewBox and dimensions
-  clone.setAttribute("viewBox", `0 0 ${VB_W} ${VB_H}`)
-  clone.setAttribute("width", String(VB_W))
-  clone.setAttribute("height", String(VB_H))
+  clone.setAttribute("viewBox", `0 0 ${VB_W} ${height === VB_H ? VB_H : height}`)
+  clone.setAttribute("width", String(width))
+  clone.setAttribute("height", String(height))
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
   clone.removeAttribute("class")
   clone.removeAttribute("preserveAspectRatio")
   clone.removeAttribute("style")
 
-  // Add background rect
   const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
   bgRect.setAttribute("width", "100%")
   bgRect.setAttribute("height", "100%")
   bgRect.setAttribute("fill", bg)
   clone.insertBefore(bgRect, clone.firstChild)
 
-  // Add inline style with embedded font
   const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style")
   styleEl.textContent = inlineStyle
   clone.insertBefore(styleEl, clone.firstChild)
 
-  // Strip all Tailwind classes and transition styles from elements
+  // Strip Tailwind classes / transitions / pointer events
   clone.querySelectorAll("*").forEach((el) => {
     el.removeAttribute("class")
     const style = el.getAttribute("style")
     if (style) {
-      // Keep only non-transition styles
       const cleaned = style
         .split(";")
         .filter((s) => !s.includes("transition") && !s.includes("pointer-events"))
@@ -88,12 +98,79 @@ function cloneForExport(svgEl: SVGSVGElement, inlineStyle: string, bg: string): 
     }
   })
 
-  // Remove invisible hit-area lines (transparent stroke)
+  // Drop hit-area lines and cursor styles
   clone.querySelectorAll('line[stroke="transparent"]').forEach((el) => el.remove())
-  // Remove cursor styles
   clone.querySelectorAll("[cursor]").forEach((el) => el.removeAttribute("cursor"))
 
   return clone
+}
+
+// Augment SVG with a small text legend at the bottom — used for print export
+function appendPrintLegend(
+  svg: SVGSVGElement,
+  fg: string,
+  observerName: string,
+  count: number,
+  extraHeight: number,
+) {
+  const totalH = VB_H + extraHeight
+  svg.setAttribute("viewBox", `0 0 ${VB_W} ${totalH}`)
+
+  const NS = "http://www.w3.org/2000/svg"
+  const g = document.createElementNS(NS, "g")
+  g.setAttribute("font-family", "Tronica Mono, monospace")
+  g.setAttribute("fill", fg)
+  g.setAttribute("font-size", "11")
+
+  // Center brand
+  const title = document.createElementNS(NS, "text")
+  title.setAttribute("x", String(VB_W / 2))
+  title.setAttribute("y", String(VB_H + 28))
+  title.setAttribute("text-anchor", "middle")
+  title.setAttribute("font-size", "16")
+  title.setAttribute("font-family", "Tronica Mono, monospace")
+  title.textContent = "ASTROLABE"
+  g.appendChild(title)
+
+  const sub = document.createElementNS(NS, "text")
+  sub.setAttribute("x", String(VB_W / 2))
+  sub.setAttribute("y", String(VB_H + 46))
+  sub.setAttribute("text-anchor", "middle")
+  sub.setAttribute("font-size", "9")
+  sub.setAttribute("opacity", "0.7")
+  sub.textContent = `${count} pulsars · observer: ${observerName} · ATNF v2.7.0`
+  g.appendChild(sub)
+
+  const legend = document.createElementNS(NS, "text")
+  legend.setAttribute("x", String(VB_W / 2))
+  legend.setAttribute("y", String(VB_H + 62))
+  legend.setAttribute("text-anchor", "middle")
+  legend.setAttribute("font-size", "8")
+  legend.setAttribute("opacity", "0.55")
+  legend.textContent = "● observer · line length = distance (kpc) · binary ticks = period (H 21cm units) · → galactic centre"
+  g.appendChild(legend)
+
+  svg.appendChild(g)
+}
+
+async function buildExportSvg(
+  svgEl: SVGSVGElement,
+  theme: Theme,
+  options: { print: boolean; observerName: string; count: number },
+): Promise<{ svg: SVGSVGElement; bg: string; width: number; height: number }> {
+  const colors = themeColors(theme)
+  const tronicaUrl = await fontToDataUrl("/fonts/TronicaMono-Regular.woff2", "font/woff2")
+  const assetUrl = await fontToDataUrl("/fonts/Asset.ttf", "font/ttf")
+  const style = buildInlineStyle(colors.fg, tronicaUrl, assetUrl)
+
+  const extraHeight = options.print ? 80 : 0
+  const totalH = VB_H + extraHeight
+
+  const clone = cloneForExport(svgEl, style, colors.bg, VB_W, totalH)
+  if (options.print) {
+    appendPrintLegend(clone, colors.fg, options.observerName, options.count, extraHeight)
+  }
+  return { svg: clone, bg: colors.bg, width: VB_W, height: totalH }
 }
 
 function serializeSvg(svgEl: SVGSVGElement): string {
@@ -108,43 +185,46 @@ function download(url: string, filename: string) {
   a.remove()
 }
 
-export function ExportButton({ svgRef, starName }: ExportButtonProps) {
+export function ExportButton({
+  svgRef,
+  starName,
+  theme,
+  observerName,
+  pulsarCount,
+  onToast,
+}: ExportButtonProps) {
   const name = slug(starName) || "astrolabe"
-  const isLight = () => document.documentElement.classList.contains("light")
 
-  async function exportSvg() {
+  async function exportSvg(print: boolean) {
     const svgEl = svgRef.current
     if (!svgEl) return
-
-    const light = isLight()
-    const { bg } = getColors(light)
-    const fontUrl = await fontToDataUrl()
-    const style = buildInlineStyle(light, fontUrl)
-    const clone = cloneForExport(svgEl, style, bg)
-
-    const svgStr = serializeSvg(clone)
+    const { svg } = await buildExportSvg(svgEl, theme, {
+      print,
+      observerName,
+      count: pulsarCount,
+    })
+    const svgStr = serializeSvg(svg)
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" })
     const url = URL.createObjectURL(blob)
-    download(url, `astrolabe-${name}.svg`)
+    download(url, `astrolabe-${name}${print ? "-print" : ""}.svg`)
     URL.revokeObjectURL(url)
+    onToast(print ? "print svg saved" : "svg saved")
   }
 
   async function exportPng() {
     const svgEl = svgRef.current
     if (!svgEl) return
-
-    const light = isLight()
-    const { bg } = getColors(light)
-    const fontUrl = await fontToDataUrl()
-    const style = buildInlineStyle(light, fontUrl)
-    const clone = cloneForExport(svgEl, style, bg)
-
-    // High-res: 4x scale for crisp output
+    // PNGs always include the title block + legend so they're shareable as-is
+    const { svg, bg, width, height } = await buildExportSvg(svgEl, theme, {
+      print: true,
+      observerName,
+      count: pulsarCount,
+    })
     const scale = 4
-    const w = VB_W * scale
-    const h = VB_H * scale
+    const w = width * scale
+    const h = height * scale
 
-    const svgStr = serializeSvg(clone)
+    const svgStr = serializeSvg(svg)
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" })
     const url = URL.createObjectURL(blob)
 
@@ -154,21 +234,17 @@ export function ExportButton({ svgRef, starName }: ExportButtonProps) {
       canvas.width = w
       canvas.height = h
       const ctx = canvas.getContext("2d")!
-
-      // Fill background
       ctx.fillStyle = bg
       ctx.fillRect(0, 0, w, h)
-
-      // Draw SVG at full resolution
       ctx.drawImage(img, 0, 0, w, h)
       URL.revokeObjectURL(url)
-
       canvas.toBlob(
         (pngBlob) => {
           if (!pngBlob) return
           const pngUrl = URL.createObjectURL(pngBlob)
           download(pngUrl, `astrolabe-${name}.png`)
           URL.revokeObjectURL(pngUrl)
+          onToast("png saved")
         },
         "image/png",
         1.0,
@@ -178,21 +254,31 @@ export function ExportButton({ svgRef, starName }: ExportButtonProps) {
   }
 
   return (
-    <div className="flex gap-3">
+    <>
       <button
         type="button"
-        onClick={exportSvg}
-        className="text-[10px] text-foreground/70 hover:text-foreground transition-colors"
+        onClick={() => exportSvg(false)}
+        className="text-[10px] text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+        title="download SVG"
       >
         svg
       </button>
       <button
         type="button"
         onClick={exportPng}
-        className="text-[10px] text-foreground/70 hover:text-foreground transition-colors"
+        className="text-[10px] text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+        title="download PNG (4× resolution)"
       >
         png
       </button>
-    </div>
+      <button
+        type="button"
+        onClick={() => exportSvg(true)}
+        className="text-[10px] text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+        title="print-ready SVG with legend"
+      >
+        print
+      </button>
+    </>
   )
 }
