@@ -93,11 +93,72 @@ function unitDirection(
   return { x: dx / d, y: dy / d, z: dz / d }
 }
 
+export type SelectionAlgorithm =
+  | "gdop"
+  | "fastest"
+  | "closest"
+  | "longest"
+  | "stable"
+  | "random"
+
+// Compute a single RelativePulsar from a Pulsar + origin (skipping selection)
+function makeRelative(p: Pulsar, origin: { gl: number; gb: number; dist: number }): RelativePulsar | null {
+  const rel = relativePosition(origin, { gl: p.gl, gb: p.gb, dist: p.dist })
+  if (rel.dist < 1e-6) return null
+  const angle = Math.atan2(
+    Math.sin(rel.gl * DEG) * Math.cos(rel.gb * DEG),
+    Math.cos(rel.gl * DEG) * Math.cos(rel.gb * DEG),
+  )
+  return { pulsar: p, gl: rel.gl, gb: rel.gb, dist: rel.dist, angle, score: 0 }
+}
+
+// Selection algorithms other than GDOP — simple sort-and-take
+function simpleSelect(
+  pulsars: Pulsar[],
+  origin: { gl: number; gb: number; dist: number },
+  count: number,
+  algorithm: Exclude<SelectionAlgorithm, "gdop">,
+): RelativePulsar[] {
+  const all = pulsars
+    .map((p) => makeRelative(p, origin))
+    .filter((rp): rp is RelativePulsar => rp !== null)
+
+  if (algorithm === "random") {
+    // Fisher–Yates shuffle, then take first `count`
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[all[i], all[j]] = [all[j]!, all[i]!]
+    }
+    return all.slice(0, count)
+  }
+
+  const cmp: Record<typeof algorithm, (a: RelativePulsar, b: RelativePulsar) => number> = {
+    fastest: (a, b) => a.pulsar.p0 - b.pulsar.p0, // shortest period first
+    closest: (a, b) => a.dist - b.dist,
+    longest: (a, b) => b.pulsar.p0 - a.pulsar.p0, // longest period first
+    stable: (a, b) => {
+      // Smallest |P-dot| = most stable. Treat null as worst.
+      const ap = a.pulsar.p1
+      const bp = b.pulsar.p1
+      if (ap === null && bp === null) return 0
+      if (ap === null) return 1
+      if (bp === null) return -1
+      return Math.abs(ap) - Math.abs(bp)
+    },
+  }
+
+  return all.sort(cmp[algorithm]).slice(0, count)
+}
+
 export function selectPulsars(
   pulsars: Pulsar[],
   origin: { gl: number; gb: number; dist: number },
   count = 14,
+  algorithm: SelectionAlgorithm = "gdop",
 ): RelativePulsar[] {
+  if (algorithm !== "gdop") {
+    return simpleSelect(pulsars, origin, count, algorithm)
+  }
   // Step 1: Compute relative positions and base quality scores
   const candidates: Array<{
     pulsar: Pulsar

@@ -10,6 +10,7 @@ interface StarSearchProps {
   stars: Star[]
   selected: Star | { name: string; gl: number; gb: number; dist: number }
   onSelect: (star: Star | CustomStar) => void
+  closeSignal?: boolean
 }
 
 const RECENT_KEY = "astrolabe.recent_stars"
@@ -130,7 +131,7 @@ function saveRecent(name: string) {
   } catch {}
 }
 
-export function StarSearch({ stars, selected, onSelect }: StarSearchProps) {
+export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearchProps) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const [recent, setRecent] = useState<string[]>([])
@@ -231,6 +232,16 @@ export function StarSearch({ stars, selected, onSelect }: StarSearchProps) {
     document.addEventListener("mousedown", onClickOutside)
     return () => document.removeEventListener("mousedown", onClickOutside)
   }, [])
+
+  // External close trigger — parent flips this when something else (e.g.
+  // the pulsar list sidebar) opens and we should yield focus.
+  useEffect(() => {
+    if (closeSignal) {
+      setOpen(false)
+      setQuery("")
+      inputRef.current?.blur()
+    }
+  }, [closeSignal])
 
   return (
     <div ref={containerRef} className="relative">
