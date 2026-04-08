@@ -4,9 +4,21 @@ import type React from "react"
 import type { Theme } from "@/lib/state"
 import { themeColors } from "@/lib/presets"
 
-// ViewBox dimensions must match plaque.tsx
-const VB_W = 1000
-const VB_H = 700
+// Read the plaque's live viewBox so export can never drift from the renderer
+function readViewBox(svgEl: SVGSVGElement): { w: number; h: number } {
+  const vb = svgEl.viewBox.baseVal
+  if (vb && vb.width > 0 && vb.height > 0) {
+    return { w: vb.width, h: vb.height }
+  }
+  const attr = svgEl.getAttribute("viewBox")
+  if (attr) {
+    const parts = attr.trim().split(/\s+/).map(parseFloat)
+    if (parts.length === 4 && parts[2]! > 0 && parts[3]! > 0) {
+      return { w: parts[2]!, h: parts[3]! }
+    }
+  }
+  return { w: 1700, h: 700 }
+}
 
 interface ExportButtonProps {
   svgRef: React.RefObject<SVGSVGElement | null>
@@ -60,14 +72,14 @@ function cloneForExport(
   svgEl: SVGSVGElement,
   inlineStyle: string,
   bg: string,
-  width: number,
-  height: number,
+  vbW: number,
+  vbH: number,
 ): SVGSVGElement {
   const clone = svgEl.cloneNode(true) as SVGSVGElement
 
-  clone.setAttribute("viewBox", `0 0 ${VB_W} ${height === VB_H ? VB_H : height}`)
-  clone.setAttribute("width", String(width))
-  clone.setAttribute("height", String(height))
+  clone.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`)
+  clone.setAttribute("width", String(vbW))
+  clone.setAttribute("height", String(vbH))
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
   clone.removeAttribute("class")
   clone.removeAttribute("preserveAspectRatio")
@@ -111,10 +123,13 @@ function appendPrintLegend(
   fg: string,
   observerName: string,
   count: number,
+  vbW: number,
+  vbH: number,
   extraHeight: number,
 ) {
-  const totalH = VB_H + extraHeight
-  svg.setAttribute("viewBox", `0 0 ${VB_W} ${totalH}`)
+  const totalH = vbH + extraHeight
+  svg.setAttribute("viewBox", `0 0 ${vbW} ${totalH}`)
+  svg.setAttribute("height", String(totalH))
 
   const NS = "http://www.w3.org/2000/svg"
   const g = document.createElementNS(NS, "g")
@@ -122,10 +137,9 @@ function appendPrintLegend(
   g.setAttribute("fill", fg)
   g.setAttribute("font-size", "11")
 
-  // Center brand
   const title = document.createElementNS(NS, "text")
-  title.setAttribute("x", String(VB_W / 2))
-  title.setAttribute("y", String(VB_H + 28))
+  title.setAttribute("x", String(vbW / 2))
+  title.setAttribute("y", String(vbH + 28))
   title.setAttribute("text-anchor", "middle")
   title.setAttribute("font-size", "16")
   title.setAttribute("font-family", "Tronica Mono, monospace")
@@ -133,8 +147,8 @@ function appendPrintLegend(
   g.appendChild(title)
 
   const sub = document.createElementNS(NS, "text")
-  sub.setAttribute("x", String(VB_W / 2))
-  sub.setAttribute("y", String(VB_H + 46))
+  sub.setAttribute("x", String(vbW / 2))
+  sub.setAttribute("y", String(vbH + 46))
   sub.setAttribute("text-anchor", "middle")
   sub.setAttribute("font-size", "9")
   sub.setAttribute("opacity", "0.7")
@@ -142,8 +156,8 @@ function appendPrintLegend(
   g.appendChild(sub)
 
   const legend = document.createElementNS(NS, "text")
-  legend.setAttribute("x", String(VB_W / 2))
-  legend.setAttribute("y", String(VB_H + 62))
+  legend.setAttribute("x", String(vbW / 2))
+  legend.setAttribute("y", String(vbH + 62))
   legend.setAttribute("text-anchor", "middle")
   legend.setAttribute("font-size", "8")
   legend.setAttribute("opacity", "0.55")
@@ -163,14 +177,14 @@ async function buildExportSvg(
   const assetUrl = await fontToDataUrl("/fonts/Asset.ttf", "font/ttf")
   const style = buildInlineStyle(colors.fg, tronicaUrl, assetUrl)
 
+  const { w: vbW, h: vbH } = readViewBox(svgEl)
   const extraHeight = options.print ? 80 : 0
-  const totalH = VB_H + extraHeight
 
-  const clone = cloneForExport(svgEl, style, colors.bg, VB_W, totalH)
+  const clone = cloneForExport(svgEl, style, colors.bg, vbW, vbH)
   if (options.print) {
-    appendPrintLegend(clone, colors.fg, options.observerName, options.count, extraHeight)
+    appendPrintLegend(clone, colors.fg, options.observerName, options.count, vbW, vbH, extraHeight)
   }
-  return { svg: clone, bg: colors.bg, width: VB_W, height: totalH }
+  return { svg: clone, bg: colors.bg, width: vbW, height: vbH + extraHeight }
 }
 
 function serializeSvg(svgEl: SVGSVGElement): string {
