@@ -80,7 +80,7 @@ export function PulsarList({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto themed-scroll">
         {sorted.map((rp, idx) => {
           const isActive = activePulsar?.pulsar.name === rp.pulsar.name
           return (
