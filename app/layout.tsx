@@ -17,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
+          themes={["dark", "light", "gold", "blueprint"]}
           enableSystem={false}
         >
           {children}

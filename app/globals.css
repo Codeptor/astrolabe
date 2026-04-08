@@ -10,20 +10,41 @@
   --color-accent: var(--accent);
 }
 
-:root {
+:root,
+.dark {
   --background: oklch(0.05 0.005 260);
   --foreground: oklch(0.92 0 0);
   --muted: oklch(0.45 0 0);
-  --line: oklch(0.88 0 0);
+  --line: oklch(1 0 0);
   --accent: oklch(0.75 0.05 220);
+  --slider-dash: rgba(224, 224, 224, 0.55);
 }
 
 .light {
   --background: oklch(0.98 0 0);
   --foreground: oklch(0.12 0 0);
   --muted: oklch(0.55 0 0);
-  --line: oklch(0.12 0 0);
+  --line: oklch(0 0 0);
   --accent: oklch(0.45 0.08 240);
+  --slider-dash: rgba(26, 26, 26, 0.55);
+}
+
+.gold {
+  --background: oklch(0.92 0.06 80);
+  --foreground: oklch(0.18 0.06 40);
+  --muted: oklch(0.45 0.04 50);
+  --line: oklch(0.12 0.05 40);
+  --accent: oklch(0.45 0.12 50);
+  --slider-dash: rgba(26, 14, 2, 0.6);
+}
+
+.blueprint {
+  --background: oklch(0.18 0.08 250);
+  --foreground: oklch(0.85 0.12 220);
+  --muted: oklch(0.55 0.08 220);
+  --line: oklch(0.85 0.12 220);
+  --accent: oklch(0.7 0.15 220);
+  --slider-dash: rgba(156, 228, 255, 0.55);
 }
 
 @font-face {
@@ -42,6 +63,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Asset";
+  src: url("/fonts/Asset.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   * {
     @apply border-foreground/10;
@@ -49,4 +78,82 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Themed range slider — CSS dashed track + square thumb, mono aesthetic.
+   Uses a per-theme --slider-dash variable (rgba) so visibility is consistent
+   across themes regardless of how oklch resolves. The dash is 2px tall so
+   it's clearly visible without sub-pixel rendering issues. */
+.themed-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  outline: none;
+  vertical-align: middle;
+  background-color: transparent;
+  background-image: linear-gradient(
+    to right,
+    var(--slider-dash) 0,
+    var(--slider-dash) 5px,
+    transparent 5px,
+    transparent 9px
+  );
+  background-size: 9px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 center;
+}
+
+.themed-slider:focus {
+  outline: none;
+}
+
+/* WebKit / Blink — hide native track entirely */
+.themed-slider::-webkit-slider-runnable-track {
+  height: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.themed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6px;
+  height: 14px;
+  background: var(--foreground);
+  border: none;
+  border-radius: 0;
+  margin-top: 0;
+  transition: width 120ms ease;
+}
+
+.themed-slider:hover::-webkit-slider-thumb,
+.themed-slider:focus-visible::-webkit-slider-thumb {
+  width: 8px;
+}
+
+/* Firefox */
+.themed-slider::-moz-range-track {
+  height: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.themed-slider::-moz-range-thumb {
+  width: 6px;
+  height: 14px;
+  background: var(--foreground);
+  border: none;
+  border-radius: 0;
+  transition: width 120ms ease;
+}
+
+.themed-slider:hover::-moz-range-thumb,
+.themed-slider:focus-visible::-moz-range-thumb {
+  width: 8px;
 }
