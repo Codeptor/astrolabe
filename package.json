@@ -1,8 +1,8 @@
 {
   "name": "astrolabe",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Interactive Pioneer/Voyager-plaque-style pulsar map generator — pick any star in the galaxy and get a triangulation map.",
+  "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -11,9 +11,26 @@
     "test:watch": "vitest",
     "update-catalogue": "npx tsx scripts/process-catalogue.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "pulsar",
+    "pioneer-plaque",
+    "voyager",
+    "astronomy",
+    "galactic-coordinates",
+    "nextjs",
+    "react",
+    "svg"
+  ],
+  "author": "Bhanu <https://bhanueso.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Codeptor/astrolabe.git"
+  },
+  "homepage": "https://astrolabe.bhanueso.dev",
+  "bugs": {
+    "url": "https://github.com/Codeptor/astrolabe/issues"
+  },
   "packageManager": "pnpm@10.32.1",
   "dependencies": {
     "lucide-react": "^1.7.0",
