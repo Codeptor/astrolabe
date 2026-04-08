@@ -58,20 +58,25 @@ function endpoint(angle: number, len: number): { x: number; y: number } {
 
 // Max radial distance from EARTH to the padded viewBox edge in a given direction.
 // Used to clamp the full line + binary text so nothing escapes the viewBox.
+// Adds FONT_SIZE of inner padding to account for glyph ascenders/descenders
+// extending perpendicular to the line direction — otherwise text at diagonal
+// angles can pop above/below the viewBox edge even though the baseline is safe.
 function maxRadialLen(angle: number): number {
   const cx = Math.cos(angle)
   const cy = -Math.sin(angle) // SVG y-down
+  const innerPad = PAD + FONT_SIZE
   let len = Infinity
-  if (cx > 1e-6) len = Math.min(len, (VB_W - PAD - EARTH_X) / cx)
-  if (cx < -1e-6) len = Math.min(len, (EARTH_X - PAD) / -cx)
-  if (cy > 1e-6) len = Math.min(len, (VB_H - PAD - EARTH_Y) / cy)
-  if (cy < -1e-6) len = Math.min(len, (EARTH_Y - PAD) / -cy)
+  if (cx > 1e-6) len = Math.min(len, (VB_W - innerPad - EARTH_X) / cx)
+  if (cx < -1e-6) len = Math.min(len, (EARTH_X - innerPad) / -cx)
+  if (cy > 1e-6) len = Math.min(len, (VB_H - innerPad - EARTH_Y) / cy)
+  if (cy < -1e-6) len = Math.min(len, (EARTH_Y - innerPad) / -cy)
   return len
 }
 
-// Approximate width of the binary text in pixels (used to reserve room
-// at the end of the line so it doesn't overflow the viewBox).
-const CHAR_WIDTH = FONT_SIZE * 0.55
+// Approximate width of a single binary character. Over-estimated on purpose:
+// a bit too tight and long-period pulsars (~35 bit binary) pointed at narrow
+// viewBox directions overflow the edge and get clipped in exports.
+const CHAR_WIDTH = FONT_SIZE * 0.7
 
 function binaryTextLen(bits: number): number {
   return X_SHIFT + bits * CHAR_WIDTH
@@ -263,11 +268,13 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         // GC stays fixed at angle 0 — rotate pulsars by -gcAngle around the observer
         const renderAngle = isAtGC ? rp.angle : rp.angle - gcAngle
 
-        // Cap total radial extent (smooth line + binary text) to viewBox edges
+        // Cap total radial extent (smooth line + binary text) to viewBox edges.
+        // Floor is 0 not 8 — a hardcoded minimum lets long-binary pulsars push
+        // text past the edge and clip in exports.
         const binaryStr = periodToBinaryString(rp.pulsar.p0)
         const textLen = binaryTextLen(binaryStr.length)
         const directionalMax = maxRadialLen(renderAngle)
-        const maxLineLen = Math.max(directionalMax - textLen, 8)
+        const maxLineLen = Math.max(directionalMax - textLen, 0)
         const totalLen = Math.min(distPx + zPx, maxLineLen)
 
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
@@ -325,10 +332,15 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               }}
             />
             {/* Binary period text — sits at (totalLen + X_SHIFT, 0) in the
-                rotated frame so it rides the line endpoint as it moves. */}
+                rotated frame so it rides the line endpoint as it moves.
+                textLength + lengthAdjust forces the rendered width to exactly
+                match binaryTextLen() so the viewBox clamp never under-estimates
+                and lets glyphs escape the edge during export. */}
             <text
               x={totalLen + X_SHIFT}
               y={LINE_HEIGHT / 2 + Y_SHIFT}
+              textLength={binaryStr.length * CHAR_WIDTH}
+              lengthAdjust="spacingAndGlyphs"
               className={fillClass}
               style={{
                 fontSize: `${FONT_SIZE}px`,

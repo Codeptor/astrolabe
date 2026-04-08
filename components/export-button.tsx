@@ -68,35 +68,16 @@ function buildInlineStyle(fg: string, tronicaUrl: string, assetUrl: string): str
   `
 }
 
-function cloneForExport(
-  svgEl: SVGSVGElement,
-  inlineStyle: string,
-  bg: string,
-  vbW: number,
-  vbH: number,
-): SVGSVGElement {
-  const clone = svgEl.cloneNode(true) as SVGSVGElement
+// Target canvas: 16:9 at 1920x1080 → scales to 3840x2160 (4K) wallpaper in PNG
+const EXPORT_W = 1920
+const EXPORT_H = 1080
+const NS = "http://www.w3.org/2000/svg"
 
-  clone.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`)
-  clone.setAttribute("width", String(vbW))
-  clone.setAttribute("height", String(vbH))
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
-  clone.removeAttribute("class")
-  clone.removeAttribute("preserveAspectRatio")
-  clone.removeAttribute("style")
-
-  const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
-  bgRect.setAttribute("width", "100%")
-  bgRect.setAttribute("height", "100%")
-  bgRect.setAttribute("fill", bg)
-  clone.insertBefore(bgRect, clone.firstChild)
-
-  const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style")
-  styleEl.textContent = inlineStyle
-  clone.insertBefore(styleEl, clone.firstChild)
-
-  // Strip Tailwind classes / transitions / pointer events
-  clone.querySelectorAll("*").forEach((el) => {
+// Clean up a cloned plaque subtree: strip Tailwind classes, transitions,
+// hit-area lines, and pointer-events styles so the exported SVG renders
+// deterministically without the runtime's interactive scaffolding.
+function stripRuntimeDecorations(root: Element) {
+  root.querySelectorAll("*").forEach((el) => {
     el.removeAttribute("class")
     const style = el.getAttribute("style")
     if (style) {
@@ -109,82 +90,119 @@ function cloneForExport(
       else el.removeAttribute("style")
     }
   })
-
-  // Drop hit-area lines and cursor styles
-  clone.querySelectorAll('line[stroke="transparent"]').forEach((el) => el.remove())
-  clone.querySelectorAll("[cursor]").forEach((el) => el.removeAttribute("cursor"))
-
-  return clone
+  root.querySelectorAll('line[stroke="transparent"]').forEach((el) => el.remove())
+  root.querySelectorAll("[cursor]").forEach((el) => el.removeAttribute("cursor"))
 }
 
-// Augment SVG with a small text legend at the bottom — used for print export
-function appendPrintLegend(
+// Legend + brand block, drawn inside the letterbox area underneath the plaque
+function appendLegend(
   svg: SVGSVGElement,
   fg: string,
   observerName: string,
   count: number,
-  vbW: number,
-  vbH: number,
-  extraHeight: number,
+  canvasW: number,
+  topY: number,
 ) {
-  const totalH = vbH + extraHeight
-  svg.setAttribute("viewBox", `0 0 ${vbW} ${totalH}`)
-  svg.setAttribute("height", String(totalH))
-
-  const NS = "http://www.w3.org/2000/svg"
   const g = document.createElementNS(NS, "g")
   g.setAttribute("font-family", "Tronica Mono, monospace")
   g.setAttribute("fill", fg)
-  g.setAttribute("font-size", "11")
 
   const title = document.createElementNS(NS, "text")
-  title.setAttribute("x", String(vbW / 2))
-  title.setAttribute("y", String(vbH + 28))
+  title.setAttribute("x", String(canvasW / 2))
+  title.setAttribute("y", String(topY))
   title.setAttribute("text-anchor", "middle")
-  title.setAttribute("font-size", "16")
-  title.setAttribute("font-family", "Tronica Mono, monospace")
+  title.setAttribute("font-size", "22")
+  title.setAttribute("letter-spacing", "2")
   title.textContent = "ASTROLABE"
   g.appendChild(title)
 
   const sub = document.createElementNS(NS, "text")
-  sub.setAttribute("x", String(vbW / 2))
-  sub.setAttribute("y", String(vbH + 46))
+  sub.setAttribute("x", String(canvasW / 2))
+  sub.setAttribute("y", String(topY + 26))
   sub.setAttribute("text-anchor", "middle")
-  sub.setAttribute("font-size", "9")
+  sub.setAttribute("font-size", "11")
   sub.setAttribute("opacity", "0.7")
   sub.textContent = `${count} pulsars · observer: ${observerName} · ATNF v2.7.0`
   g.appendChild(sub)
 
   const legend = document.createElementNS(NS, "text")
-  legend.setAttribute("x", String(vbW / 2))
-  legend.setAttribute("y", String(vbH + 62))
+  legend.setAttribute("x", String(canvasW / 2))
+  legend.setAttribute("y", String(topY + 46))
   legend.setAttribute("text-anchor", "middle")
-  legend.setAttribute("font-size", "8")
-  legend.setAttribute("opacity", "0.55")
+  legend.setAttribute("font-size", "10")
+  legend.setAttribute("opacity", "0.5")
   legend.textContent = "● observer · line length = distance (kpc) · binary ticks = period (H 21cm units) · → galactic centre"
   g.appendChild(legend)
 
   svg.appendChild(g)
 }
 
+// Build a 16:9 export SVG with the plaque letterboxed inside it.
+// Scales the plaque to fill the canvas in its limiting dimension, fills the
+// rest with theme bg, and optionally overlays a legend block in the bottom
+// letterbox area.
 async function buildExportSvg(
   svgEl: SVGSVGElement,
   theme: Theme,
-  options: { print: boolean; observerName: string; count: number },
+  options: { withLegend: boolean; observerName: string; count: number },
 ): Promise<{ svg: SVGSVGElement; bg: string; width: number; height: number }> {
   const colors = themeColors(theme)
   const tronicaUrl = await fontToDataUrl("/fonts/TronicaMono-Regular.woff2", "font/woff2")
   const assetUrl = await fontToDataUrl("/fonts/Asset.ttf", "font/ttf")
   const style = buildInlineStyle(colors.fg, tronicaUrl, assetUrl)
 
-  const { w: vbW, h: vbH } = readViewBox(svgEl)
-  const extraHeight = options.print ? 80 : 0
+  const { w: plaqueW, h: plaqueH } = readViewBox(svgEl)
 
-  const clone = cloneForExport(svgEl, style, colors.bg, vbW, vbH)
-  if (options.print) {
-    appendPrintLegend(clone, colors.fg, options.observerName, options.count, vbW, vbH, extraHeight)
+  // Build outer 16:9 SVG canvas
+  const outer = document.createElementNS(NS, "svg") as SVGSVGElement
+  outer.setAttribute("xmlns", NS)
+  outer.setAttribute("viewBox", `0 0 ${EXPORT_W} ${EXPORT_H}`)
+  outer.setAttribute("width", String(EXPORT_W))
+  outer.setAttribute("height", String(EXPORT_H))
+
+  // Embedded fonts + base stroke/fill styling
+  const styleEl = document.createElementNS(NS, "style")
+  styleEl.textContent = style
+  outer.appendChild(styleEl)
+
+  // Solid background fill
+  const bgRect = document.createElementNS(NS, "rect")
+  bgRect.setAttribute("width", "100%")
+  bgRect.setAttribute("height", "100%")
+  bgRect.setAttribute("fill", colors.bg)
+  outer.appendChild(bgRect)
+
+  // Clone the plaque, strip runtime decorations, nest it inside outer SVG.
+  // `preserveAspectRatio="xMidYMid meet"` fits the plaque inside its nested
+  // slot, letterboxed. We shift the nested slot up slightly when a legend is
+  // appended so there's breathing room at the bottom.
+  const inner = svgEl.cloneNode(true) as SVGSVGElement
+  inner.removeAttribute("class")
+  inner.removeAttribute("style")
+  stripRuntimeDecorations(inner)
+
+  const scale = Math.min(EXPORT_W / plaqueW, EXPORT_H / plaqueH)
+  const innerW = plaqueW * scale
+  const innerH = plaqueH * scale
+  const innerX = (EXPORT_W - innerW) / 2
+  const innerY = options.withLegend
+    ? (EXPORT_H - innerH) / 2 - 50
+    : (EXPORT_H - innerH) / 2
+
+  inner.setAttribute("x", String(innerX))
+  inner.setAttribute("y", String(innerY))
+  inner.setAttribute("width", String(innerW))
+  inner.setAttribute("height", String(innerH))
+  inner.setAttribute("viewBox", `0 0 ${plaqueW} ${plaqueH}`)
+  inner.setAttribute("preserveAspectRatio", "xMidYMid meet")
+  outer.appendChild(inner)
+
+  if (options.withLegend) {
+    const legendTop = innerY + innerH + 40
+    appendLegend(outer, colors.fg, options.observerName, options.count, EXPORT_W, legendTop)
   }
-  return { svg: clone, bg: colors.bg, width: vbW, height: vbH + extraHeight }
+
+  return { svg: outer, bg: colors.bg, width: EXPORT_W, height: EXPORT_H }
 }
 
 function serializeSvg(svgEl: SVGSVGElement): string {
@@ -209,32 +227,33 @@ export function ExportButton({
 }: ExportButtonProps) {
   const name = slug(starName) || "astrolabe"
 
-  async function exportSvg(print: boolean) {
+  async function exportSvg(withLegend: boolean) {
     const svgEl = svgRef.current
     if (!svgEl) return
     const { svg } = await buildExportSvg(svgEl, theme, {
-      print,
+      withLegend,
       observerName,
       count: pulsarCount,
     })
     const svgStr = serializeSvg(svg)
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" })
     const url = URL.createObjectURL(blob)
-    download(url, `astrolabe-${name}${print ? "-print" : ""}.svg`)
+    download(url, `astrolabe-${name}${withLegend ? "-print" : ""}.svg`)
     URL.revokeObjectURL(url)
-    onToast(print ? "print svg saved" : "svg saved")
+    onToast(withLegend ? "print svg saved" : "svg saved")
   }
 
   async function exportPng() {
     const svgEl = svgRef.current
     if (!svgEl) return
-    // PNGs always include the title block + legend so they're shareable as-is
+    // PNG is 16:9 wallpaper-ready, no legend overlay so it's clean for any use
     const { svg, bg, width, height } = await buildExportSvg(svgEl, theme, {
-      print: true,
+      withLegend: false,
       observerName,
       count: pulsarCount,
     })
-    const scale = 4
+    // 2× scale: 1920×1080 → 3840×2160 (4K UHD wallpaper)
+    const scale = 2
     const w = width * scale
     const h = height * scale
 

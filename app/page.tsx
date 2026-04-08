@@ -842,7 +842,7 @@ function PageInner() {
           plaque corners; sidebar (z-60) sits on top of everything. */}
       {plaqueData && (
         <div
-          className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-20 transition-[padding] duration-300 ${
+          className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-48 py-24 transition-[padding] duration-300 ${
             sidebarOpen ? "md:pl-[324px]" : ""
           }`}
         >
