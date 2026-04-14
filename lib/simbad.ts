@@ -24,6 +24,33 @@ interface ParsedSimbad {
   plxErr: number | null
 }
 
+function sanitizeTapInput(name: string): string {
+  return name
+    .replace(/[^A-Za-z0-9+.\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export function buildTapLikeQuery(name: string): string {
+  const cleaned = sanitizeTapInput(name)
+  const tokens = cleaned.split(/[\s\-_]+/).filter((t) => t.length > 0)
+  if (tokens.length === 0 || !cleaned) return ""
+
+  const pattern = tokens.join("%")
+  return `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value, b.plx_err
+FROM basic AS b
+JOIN ident AS i ON b.oid = i.oidref
+WHERE LOWER(i.id) LIKE LOWER('%${pattern}%')
+ORDER BY
+  CASE
+    WHEN LOWER(i.id) = LOWER('${cleaned}') THEN 0
+    WHEN LOWER(i.id) LIKE LOWER('${cleaned}%') THEN 1
+    ELSE 2
+  END,
+  LOWER(i.id),
+  LOWER(b.main_id)`
+}
+
 async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
   let response: Response
   try {
@@ -61,16 +88,8 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
 }
 
 async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
-  // Tokenize, drop SQL wildcards/quotes, build a %a%b%c% pattern
-  const cleaned = name.replace(/[%_']/g, "").trim()
-  const tokens = cleaned.split(/[\s\-_]+/).filter((t) => t.length > 0)
-  if (tokens.length === 0) return null
-  const pattern = tokens.join("%")
-
-  const query = `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value, b.plx_err
-FROM basic AS b
-JOIN ident AS i ON b.oid = i.oidref
-WHERE i.id LIKE '%${pattern}%'`
+  const query = buildTapLikeQuery(name)
+  if (!query) return null
 
   const params = new URLSearchParams({
     request: "doQuery",

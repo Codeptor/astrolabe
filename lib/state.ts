@@ -2,6 +2,8 @@
 // Pattern: every shareable bit of state has a key here, and is round-tripped
 // through `parseState` / `buildSearchString`. Defaults are omitted from the URL.
 
+import { parseCoordObserverString } from "./custom-observer"
+
 export type CustomObserver = {
   name: string
   gl: number
@@ -61,16 +63,11 @@ function encodeObserver(o: ObserverRef): string {
 function decodeObserver(s: string): ObserverRef | null {
   if (!s) return null
   if (s.startsWith("coord:")) {
-    const body = s.slice(6)
-    const m = body.match(/^l=(-?[\d.]+),b=(-?[\d.]+),d=([\d.]+)$/)
-    if (!m) return null
-    const gl = parseFloat(m[1]!)
-    const gb = parseFloat(m[2]!)
-    const dist = parseFloat(m[3]!)
-    if (Number.isNaN(gl) || Number.isNaN(gb) || Number.isNaN(dist)) return null
+    const parsed = parseCoordObserverString(s)
+    if (!parsed) return null
     return {
       kind: "custom",
-      data: { name: `l=${gl} b=${gb} d=${dist}kpc`, gl, gb, dist },
+      data: parsed,
     }
   }
   return { kind: "star", name: s }

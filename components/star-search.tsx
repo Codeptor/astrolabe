@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import type { Star } from "@/lib/types"
-import { raDecToGalactic } from "@/lib/coordinates"
+import { createLatestOnlyRunner } from "@/lib/async-latest"
+import { looksLikeObserverInput, parseObserverInput } from "@/lib/custom-observer"
 
 type CustomStar = { name: string; gl: number; gb: number; dist: number; aliases?: string[] }
 
@@ -15,60 +16,6 @@ interface StarSearchProps {
 
 const RECENT_KEY = "astrolabe.recent_stars"
 const MAX_RECENT = 6
-
-// Galactic coords: l=120 b=-15 d=2.5
-const GAL_RE = /^l\s*=\s*([-\d.]+)\s+b\s*=\s*([-\d.]+)\s+d\s*=\s*([\d.]+)$/i
-// RA/Dec sexagesimal: 18h36m56s +38d47m01s d=0.0077  (or with colons)
-const RADEC_SEX_RE =
-  /^(\d{1,2})[h:](\d{1,2})[m:]([\d.]+)s?\s+([+-]?\d{1,2})[d°:](\d{1,2})[m':]([\d.]+)["s]?\s+d\s*=\s*([\d.]+)$/i
-// RA/Dec decimal degrees: ra=83.633 dec=22.014 d=2.0
-const RADEC_DEC_RE =
-  /^ra\s*=\s*([-\d.]+)\s+dec\s*=\s*([-\d.]+)\s+d\s*=\s*([\d.]+)$/i
-
-function parseInput(query: string): CustomStar | null {
-  const q = query.trim()
-
-  const gal = q.match(GAL_RE)
-  if (gal) {
-    const gl = parseFloat(gal[1]!)
-    const gb = parseFloat(gal[2]!)
-    const dist = parseFloat(gal[3]!)
-    if (!isNaN(gl) && !isNaN(gb) && !isNaN(dist)) {
-      return { name: `l=${gl} b=${gb} d=${dist}kpc`, gl, gb, dist }
-    }
-  }
-
-  const radecDec = q.match(RADEC_DEC_RE)
-  if (radecDec) {
-    const ra = parseFloat(radecDec[1]!)
-    const dec = parseFloat(radecDec[2]!)
-    const dist = parseFloat(radecDec[3]!)
-    if (!isNaN(ra) && !isNaN(dec) && !isNaN(dist)) {
-      const { gl, gb } = raDecToGalactic(ra, dec)
-      return { name: `RA=${ra} Dec=${dec} d=${dist}kpc`, gl, gb, dist }
-    }
-  }
-
-  const radecSex = q.match(RADEC_SEX_RE)
-  if (radecSex) {
-    const rh = parseFloat(radecSex[1]!)
-    const rm = parseFloat(radecSex[2]!)
-    const rs = parseFloat(radecSex[3]!)
-    const dSign = radecSex[4]!.startsWith("-") ? -1 : 1
-    const dd = Math.abs(parseFloat(radecSex[4]!))
-    const dm = parseFloat(radecSex[5]!)
-    const ds = parseFloat(radecSex[6]!)
-    const dist = parseFloat(radecSex[7]!)
-    const ra = (rh + rm / 60 + rs / 3600) * 15
-    const dec = dSign * (dd + dm / 60 + ds / 3600)
-    if (!isNaN(ra) && !isNaN(dec) && !isNaN(dist)) {
-      const { gl, gb } = raDecToGalactic(ra, dec)
-      return { name: q, gl, gb, dist }
-    }
-  }
-
-  return null
-}
 
 // Lightweight fuzzy match scoring
 function fuzzyScore(query: string, target: string): number {
@@ -154,16 +101,32 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  const parsed = useMemo(() => (query.trim() ? parseInput(query) : null), [query])
+  const parsed = useMemo(() => (query.trim() ? parseObserverInput(query) : null), [query])
+  const structuredInput = useMemo(() => looksLikeObserverInput(query), [query])
   const results = useMemo(
     () => (query.trim() && !parsed ? searchStars(stars, query) : []),
     [stars, query, parsed],
   )
+  const resolveRemoteStar = useMemo(
+    () =>
+      createLatestOnlyRunner(async (name: string): Promise<CustomStar | null> => {
+        const response = await fetch(`/api/star-resolve?name=${encodeURIComponent(name)}`)
+        if (!response.ok) return null
+        const data = await response.json()
+        return { name: data.name, gl: data.gl, gb: data.gb, dist: data.dist }
+      }),
+    [],
+  )
 
   // Debounced SIMBAD lookup when local search has no high-quality results
   useEffect(() => {
+    let cancelled = false
     setApiResult(null)
     if (!query.trim() || parsed) {
+      setApiLoading(false)
+      return
+    }
+    if (structuredInput) {
       setApiLoading(false)
       return
     }
@@ -175,16 +138,21 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
     const handle = setTimeout(async () => {
       setApiLoading(true)
       try {
-        const r = await fetch(`/api/star-resolve?name=${encodeURIComponent(query.trim())}`)
-        if (r.ok) {
-          const data = await r.json()
-          setApiResult({ name: data.name, gl: data.gl, gb: data.gb, dist: data.dist })
+        const { value, isLatest } = await resolveRemoteStar(query.trim())
+        if (!cancelled && isLatest) {
+          setApiResult(value)
         }
-      } catch {}
-      setApiLoading(false)
+      } catch {
+        if (!cancelled) setApiResult(null)
+      } finally {
+        if (!cancelled) setApiLoading(false)
+      }
     }, 350)
-    return () => clearTimeout(handle)
-  }, [query, parsed, results])
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [query, parsed, results, resolveRemoteStar, structuredInput])
 
   const recentStars = useMemo(() => {
     const map = new Map(stars.map((s) => [s.name, s]))
