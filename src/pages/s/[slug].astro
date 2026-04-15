@@ -26,7 +26,13 @@ const siteUrl = Astro.site?.toString() ?? "https://astrolabe.bhanueso.dev/"
 const target = `/?from=${encodeURIComponent(name)}`
 const canonical = `${siteUrl}s/${slug}`
 const ogImage = `${siteUrl}og.png?from=${encodeURIComponent(name)}`
-const description = `Pioneer-plaque pulsar map rendered from ${name} (${dist.toFixed(2)} kpc from Sol).`
+const distStr =
+  dist <= 0
+    ? "at Sol"
+    : dist < 1
+    ? `${(dist * 1000).toFixed(1)} pc from Sol`
+    : `${dist.toFixed(2)} kpc from Sol`
+const description = `Pioneer-plaque pulsar map rendered from ${name} (${distStr}).`
 ---
 
 <!doctype html>
