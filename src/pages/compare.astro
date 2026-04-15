@@ -1,0 +1,12 @@
+---
+import RootLayout from "../layouts/RootLayout.astro"
+import { ComparePage } from "../components/ComparePage"
+---
+
+<RootLayout
+  title="Astrolabe — compare two observers"
+  description="Compare the Pioneer-plaque pulsar map from two different observers side-by-side."
+  path="/compare"
+>
+  <ComparePage client:only="react" />
+</RootLayout>

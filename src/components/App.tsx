@@ -1,13 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Volume2, VolumeOff } from "lucide-react"
 import type { Pulsar, Star, RelativePulsar, PlaqueData } from "@/lib/types"
-import { selectPulsars } from "@/lib/pulsar-selection"
-import { computePioneerPlaque } from "@/lib/pioneer-original"
-import {
-  galacticCenterAngle,
-  galacticCenterDistance,
-  relativePosition,
-} from "@/lib/coordinates"
+import { computePlaqueData } from "@/lib/compute-plaque"
 import {
   type AppState,
   type ObserverRef,
@@ -19,7 +13,6 @@ import {
   buildSearchString,
 } from "@/lib/state"
 import { useTheme } from "@/lib/theme"
-import { applyProperMotion, evolvePeriod } from "@/lib/proper-motion"
 import { playPulsar, playToggleCue, type PulsarVoice } from "@/lib/pulsar-audio"
 import Plaque from "@/components/plaque"
 import { StarSearch } from "@/components/star-search"
@@ -33,7 +26,6 @@ import { EmbedModal } from "@/components/embed-modal"
 import { SavedViews } from "@/components/saved-views"
 import { Onboarding } from "@/components/onboarding"
 
-const DEG = Math.PI / 180
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
 
 function formatPulsarForCopy(rp: RelativePulsar): string {
@@ -193,60 +185,14 @@ function PageInner() {
   )
 
   const plaqueData = useMemo<PlaqueData | null>(() => {
-    if (pulsars.length === 0) return null
-    const useOrigin = appState.mode === "1972" ? SOL : origin
-
-    // Select pulsars from the present-day catalogue first so the chosen set
-    // stays stable as the time-machine slider moves. Otherwise the line set
-    // would shuffle on every drag and re-trigger the discovery animation.
-    const selected =
-      appState.mode === "1972"
-        ? computePioneerPlaque(pulsars)
-        : selectPulsars(pulsars, useOrigin, appState.count, appState.algorithm)
-
-    // Then apply synthetic proper motion + spindown to the chosen pulsars
-    // and recompute their relative coordinates. Position drift smoothly
-    // rotates/resizes the lines; period evolution flips bits in the binary
-    // code (real pulsars slow down via magnetic braking).
-    const driftedSelected =
-      appState.epoch === 0
-        ? selected
-        : selected.map((rp) => {
-            const drifted = applyProperMotion(rp.pulsar, appState.epoch)
-            const evolvedP0 = evolvePeriod(
-              rp.pulsar.p0,
-              rp.pulsar.p1,
-              appState.epoch,
-            )
-            const driftedPulsar = {
-              ...rp.pulsar,
-              gl: drifted.gl,
-              gb: drifted.gb,
-              p0: evolvedP0,
-            }
-            const rel = relativePosition(useOrigin, {
-              gl: driftedPulsar.gl,
-              gb: driftedPulsar.gb,
-              dist: driftedPulsar.dist,
-            })
-            if (rel.dist < 1e-6) return rp
-            const angle = Math.atan2(
-              Math.sin(rel.gl * DEG) * Math.cos(rel.gb * DEG),
-              Math.cos(rel.gl * DEG) * Math.cos(rel.gb * DEG),
-            )
-            return {
-              ...rp,
-              pulsar: driftedPulsar,
-              gl: rel.gl,
-              gb: rel.gb,
-              dist: rel.dist,
-              angle,
-            }
-          })
-
-    const gcAngle = galacticCenterAngle(useOrigin)
-    const gcDist = galacticCenterDistance(useOrigin)
-    return { origin: useOrigin, pulsars: driftedSelected, gcAngle, gcDist }
+    return computePlaqueData(
+      pulsars,
+      origin,
+      appState.count,
+      appState.algorithm,
+      appState.mode,
+      appState.epoch,
+    )
   }, [pulsars, origin, appState.mode, appState.count, appState.algorithm, appState.epoch])
 
   // Apply persisted locked pulsar from URL once data is loaded
