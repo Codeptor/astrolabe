@@ -533,6 +533,21 @@ function PageInner() {
       } else if (e.key === "v" || e.key === "V") {
         if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         setViewsOpen((v) => !v)
+      } else if (e.key === "i" || e.key === "I") {
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
+        if (appState.observer.kind !== "star") return
+        setInfoCardOpen((v) => {
+          if (!v) {
+            const btn = document.querySelector<HTMLElement>('[aria-label^="more info on"]')
+            if (btn) {
+              const rect = btn.getBoundingClientRect()
+              setInfoCardAnchor({ top: rect.bottom + 6, left: rect.left - 8 })
+            } else {
+              setInfoCardAnchor({ top: 60, left: 20 })
+            }
+          }
+          return !v
+        })
       } else if (e.key === "[") {
         if (infoOpen) return
         setAppState((s) => ({ ...s, count: Math.max(5, s.count - 1) }))
@@ -931,6 +946,8 @@ function PageInner() {
               </div>
               <div>
                 <span className="font-mono text-foreground/75">E</span> share ·{" "}
+                <span className="font-mono text-foreground/75">V</span> saved views ·{" "}
+                <span className="font-mono text-foreground/75">I</span> star info ·{" "}
                 <span className="font-mono text-foreground/75">Tab</span> cycle ·{" "}
                 <span className="font-mono text-foreground/75">?</span> help ·{" "}
                 <span className="font-mono text-foreground/75">Esc</span> reset
