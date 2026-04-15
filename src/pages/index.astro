@@ -1,0 +1,10 @@
+---
+import RootLayout from "../layouts/RootLayout.astro"
+import { App } from "../components/App"
+---
+
+<RootLayout>
+  <App client:only="react">
+    <div slot="fallback" class="h-svh"></div>
+  </App>
+</RootLayout>
