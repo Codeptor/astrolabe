@@ -854,14 +854,14 @@ function PageInner() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 relative" />
-
-      {plaqueData && (
-        <div
-          className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-48 py-24 transition-[padding] duration-300 ${
-            sidebarOpen ? "md:pl-[324px]" : ""
-          }`}
-        >
+      <main
+        id="main"
+        aria-label="pulsar map"
+        className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-48 py-24 transition-[padding] duration-300 ${
+          sidebarOpen ? "md:pl-[324px]" : ""
+        }`}
+      >
+        {plaqueData && (
           <div className="w-full h-full pointer-events-auto">
             <Plaque
               ref={svgRef}
@@ -872,8 +872,9 @@ function PageInner() {
               onClick={handlePulsarSelect}
             />
           </div>
-        </div>
-      )}
+        )}
+      </main>
+
       {toast && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[70] bg-foreground/10 backdrop-blur px-3 py-1 text-[10px] text-foreground border border-foreground/20 pointer-events-none">
           {toast}

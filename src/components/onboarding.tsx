@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const KEY = "astrolabe.onboarded"
 
@@ -34,16 +34,35 @@ const STEPS: Step[] = [
 export function Onboarding() {
   const [step, setStep] = useState(0)
   const [visible, setVisible] = useState(false)
+  const primaryButtonRef = useRef<HTMLButtonElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     try {
       if (typeof window === "undefined") return
       if (localStorage.getItem(KEY) !== "1") {
-        // Small delay so the page renders first
         setTimeout(() => setVisible(true), 600)
       }
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (!visible) return
+    previousFocusRef.current = document.activeElement as HTMLElement | null
+    primaryButtonRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        dismiss()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      previousFocusRef.current?.focus?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible])
 
   function dismiss() {
     setVisible(false)
@@ -68,27 +87,35 @@ export function Onboarding() {
     "bottom-left": "left-6 bottom-20",
   }
 
+  const titleId = `onboarding-title-${step}`
+  const bodyId = `onboarding-body-${step}`
+
   return (
     <div
       className="fixed inset-0 z-[120] bg-background/40 backdrop-blur-[2px]"
       onClick={dismiss}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
         className={`absolute ${positionClasses[s.position]} max-w-sm bg-background border border-foreground/25 p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <h3
+          id={titleId}
           className="text-[14px] text-foreground mb-2 leading-tight"
           style={{ fontFamily: "var(--font-display)" }}
         >
           {s.title}
         </h3>
-        <p className="text-[11px] text-foreground/70 leading-relaxed mb-4">
+        <p id={bodyId} className="text-[11px] text-foreground/70 leading-relaxed mb-4">
           {s.body}
         </p>
 
         <div className="flex items-center justify-between">
-          <div className="flex gap-1">
+          <div className="flex gap-1" aria-hidden="true">
             {STEPS.map((_, i) => (
               <span
                 key={i}
@@ -102,14 +129,15 @@ export function Onboarding() {
             <button
               type="button"
               onClick={dismiss}
-              className="text-[10px] text-foreground/50 hover:text-foreground transition cursor-pointer"
+              className="text-[10px] text-foreground/50 hover:text-foreground transition cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
             >
               skip
             </button>
             <button
+              ref={primaryButtonRef}
               type="button"
               onClick={next}
-              className="text-[10px] bg-foreground text-background px-3 py-1 cursor-pointer hover:bg-foreground/90 transition"
+              className="text-[10px] bg-foreground text-background px-3 py-1 cursor-pointer hover:bg-foreground/90 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               {step < STEPS.length - 1 ? "next" : "got it"}
             </button>

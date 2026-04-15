@@ -3,3 +3,4 @@ dist/
 .astro/
 *.tsbuildinfo
 .vercel
+.next/
