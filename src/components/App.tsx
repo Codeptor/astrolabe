@@ -910,6 +910,8 @@ function PageInner() {
         </div>
       </header>
 
+      <div aria-hidden="true" className="flex-1 min-h-0" />
+
       <main
         id="main"
         aria-label="pulsar map"
