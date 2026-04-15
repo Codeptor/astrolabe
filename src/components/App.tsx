@@ -132,10 +132,14 @@ function PageInner() {
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [timePlaying, setTimePlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
-  const [enriched, setEnriched] = useState<{ spType: string | null; otype: string | null } | null>(
-    null,
+  const [enriched, setEnriched] = useState<{
+    spType: string | null
+    otype: string | null
+    vmag: number | null
+  } | null>(null)
+  const enrichedCache = useRef(
+    new Map<string, { spType: string | null; otype: string | null; vmag: number | null }>(),
   )
-  const enrichedCache = useRef(new Map<string, { spType: string | null; otype: string | null }>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -189,15 +193,21 @@ function PageInner() {
     [appState.observer, stars],
   )
 
-  // SIMBAD enrichment — fetch spectral type + object type for any observer
-  // except Sol. Cached per-name so repeat visits are instant.
+  // SIMBAD enrichment — fetch spectral type + object type + V magnitude
+  // for the current observer.  SIMBAD has no parallax entry for Sol so the
+  // /api/star-resolve endpoint can't return it; we ship a hardcoded Sun
+  // record instead.  Cached per-name so repeat visits are instant.
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (origin.name === "Sol" || appState.observer.kind !== "star") {
+    if (appState.observer.kind !== "star") {
       setEnriched(null)
       return
     }
     const name = origin.name
+    if (name === "Sol" || name === "Sun" || name === "Earth") {
+      setEnriched({ spType: "G2V", otype: "Star", vmag: -26.74 })
+      return
+    }
     const cached = enrichedCache.current.get(name)
     if (cached !== undefined) {
       setEnriched(cached)
@@ -209,7 +219,11 @@ function PageInner() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return
-        const e = { spType: data.spType ?? null, otype: data.otype ?? null }
+        const e = {
+          spType: data.spType ?? null,
+          otype: data.otype ?? null,
+          vmag: typeof data.vmag === "number" ? data.vmag : null,
+        }
         enrichedCache.current.set(name, e)
         setEnriched(e)
       })
@@ -661,14 +675,26 @@ function PageInner() {
                 </a>
               )}
             </span>
-            {enriched && (enriched.spType || enriched.otype) && (
+            {enriched && (enriched.spType || enriched.otype || enriched.vmag !== null) && (
               <>
                 {dot}
                 <span
                   className="text-foreground/55 text-[9px] uppercase tracking-[0.12em]"
-                  title={[enriched.spType ? `spectral type ${enriched.spType}` : null, enriched.otype ? `object type ${enriched.otype}` : null].filter(Boolean).join(" · ")}
+                  title={[
+                    enriched.spType ? `spectral type ${enriched.spType}` : null,
+                    enriched.otype ? `object type ${enriched.otype}` : null,
+                    enriched.vmag !== null ? `apparent V magnitude ${enriched.vmag.toFixed(2)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 >
-                  {[enriched.spType, enriched.otype].filter(Boolean).join(" · ")}
+                  {[
+                    enriched.spType,
+                    enriched.otype,
+                    enriched.vmag !== null ? `V ${enriched.vmag.toFixed(2)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </>
             )}

@@ -16,6 +16,7 @@ export interface ResolvedStar {
   source: "simbad"
   spType: string | null
   otype: string | null
+  vmag: number | null
 }
 
 interface ParsedSimbad {
@@ -26,6 +27,7 @@ interface ParsedSimbad {
   plxErr: number | null
   spType: string | null
   otype: string | null
+  vmag: number | null
 }
 
 function sanitizeTapInput(name: string): string {
@@ -41,7 +43,9 @@ export function buildTapLikeQuery(name: string): string {
   if (tokens.length === 0 || !cleaned) return ""
 
   const pattern = tokens.join("%")
-  return `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value, b.plx_err, b.sp_type, b.otype_txt
+  return `SELECT TOP 1
+  b.main_id, b.ra, b.dec, b.plx_value, b.plx_err, b.sp_type, b.otype_txt,
+  (SELECT TOP 1 f.flux FROM flux AS f WHERE f.oidref = b.oid AND f.filter = 'V') AS vmag
 FROM basic AS b
 JOIN ident AS i ON b.oid = i.oidref
 WHERE LOWER(i.id) LIKE LOWER('%${pattern}%')
@@ -90,6 +94,11 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
   const oMatch = text.match(/^%O\s+(.+?)\s*$/m)
   const otype = oMatch?.[1] ? oMatch[1].trim() : null
 
+  // Sesame %M lines carry magnitudes: "%M.V <value> ..." — we only want V.
+  const vMatch = text.match(/^%M\.V\s+([-\d.]+)/m)
+  const vmagRaw = vMatch ? parseFloat(vMatch[1]!) : NaN
+  const vmag = Number.isFinite(vmagRaw) ? vmagRaw : null
+
   return {
     name: mainId,
     ra,
@@ -98,6 +107,7 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
     plxErr: plxErr !== null && Number.isFinite(plxErr) ? plxErr : null,
     spType,
     otype,
+    vmag,
   }
 }
 
@@ -135,8 +145,11 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
   const plxErr = plxErrRaw === null ? null : Number(plxErrRaw)
   const spTypeRaw = row[5]
   const otypeRaw = row[6]
+  const vmagRaw = row[7]
 
   if (!Number.isFinite(ra) || !Number.isFinite(dec)) return null
+
+  const vmagParsed = vmagRaw === null || vmagRaw === undefined ? NaN : Number(vmagRaw)
 
   return {
     name: mainId,
@@ -146,6 +159,7 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
     plxErr: plxErr !== null && Number.isFinite(plxErr) ? plxErr : null,
     spType: spTypeRaw === null || spTypeRaw === undefined ? null : String(spTypeRaw).trim() || null,
     otype: otypeRaw === null || otypeRaw === undefined ? null : String(otypeRaw).trim() || null,
+    vmag: Number.isFinite(vmagParsed) ? vmagParsed : null,
   }
 }
 
@@ -178,5 +192,6 @@ export async function resolveStar(name: string): Promise<ResolvedStar | null> {
     source: "simbad",
     spType: parsed.spType,
     otype: parsed.otype,
+    vmag: parsed.vmag === null ? null : Math.round(parsed.vmag * 100) / 100,
   }
 }
