@@ -1334,9 +1334,9 @@ function PageInner() {
         </div>
       )}
 
-      <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between relative z-50">
+      <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between relative z-50 pointer-events-none">
         <div
-          className={`min-h-[40px] w-fit ${activePulsar ? "cursor-pointer" : ""}`}
+          className={`min-h-[40px] w-fit pointer-events-auto ${activePulsar ? "cursor-pointer" : ""}`}
           onClick={(e) => {
             e.stopPropagation()
             if (activePulsar) handlePulsarCopy(activePulsar)
@@ -1344,7 +1344,7 @@ function PageInner() {
         >
           <PulsarTooltip pulsar={activePulsar} locked={!!lockedPulsar} />
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 pointer-events-auto">
           {plaqueData && (
             <div className="flex items-center gap-0 text-[10px] text-foreground/70 border border-foreground/15 leading-none select-none">
               <button
