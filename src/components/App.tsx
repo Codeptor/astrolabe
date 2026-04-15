@@ -11,6 +11,7 @@ import {
   DEFAULT_STATE,
   parseState,
   buildSearchString,
+  shareableUrl,
 } from "@/lib/state"
 import { useTheme } from "@/lib/theme"
 import { playPulsar, playToggleCue, type PulsarVoice } from "@/lib/pulsar-audio"
@@ -530,6 +531,22 @@ function PageInner() {
       } else if (e.key === "e" || e.key === "E") {
         if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         setEmbedOpen(true)
+      } else if (e.key === "c" || e.key === "C") {
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
+        const url = shareableUrl(appState)
+        if (!url || typeof navigator === "undefined" || !navigator.clipboard) return
+        navigator.clipboard
+          .writeText(url)
+          .then(() => showToast("link copied"))
+          .catch(() => showToast("copy failed"))
+      } else if (e.key === "f" || e.key === "F") {
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
+        if (typeof document === "undefined") return
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {})
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {})
+        }
       } else if (e.key === "v" || e.key === "V") {
         if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         setViewsOpen((v) => !v)
@@ -609,6 +626,7 @@ function PageInner() {
     cyclePulsar,
     showToast,
     setAppState,
+    appState,
   ])
 
   if (pulsars.length === 0) {
@@ -946,6 +964,8 @@ function PageInner() {
               </div>
               <div>
                 <span className="font-mono text-foreground/75">E</span> share ·{" "}
+                <span className="font-mono text-foreground/75">C</span> copy link ·{" "}
+                <span className="font-mono text-foreground/75">F</span> fullscreen ·{" "}
                 <span className="font-mono text-foreground/75">V</span> saved views ·{" "}
                 <span className="font-mono text-foreground/75">I</span> star info ·{" "}
                 <span className="font-mono text-foreground/75">Tab</span> cycle ·{" "}
@@ -1156,30 +1176,73 @@ function PageInner() {
                     search ·{" "}
                     <span className="font-mono text-foreground/90">R</span> random
                     star ·{" "}
-                    <span className="font-mono text-foreground/90">L</span> toggle
-                    pulsar list ·{" "}
-                    <span className="font-mono text-foreground/90">G</span> toggle
-                    rings ·{" "}
+                    <span className="font-mono text-foreground/90">Shift+R</span>{" "}
+                    random galactic point ·{" "}
+                    <span className="font-mono text-foreground/90">K</span> custom
+                    coords
+                  </li>
+                  <li>
+                    <span className="font-mono text-foreground/90">I</span> star
+                    info ·{" "}
+                    <span className="font-mono text-foreground/90">V</span> saved
+                    views ·{" "}
+                    <span className="font-mono text-foreground/90">E</span> share /
+                    embed ·{" "}
+                    <span className="font-mono text-foreground/90">C</span> copy
+                    link ·{" "}
+                    <span className="font-mono text-foreground/90">F</span>{" "}
+                    fullscreen
+                  </li>
+                  <li>
+                    <span className="font-mono text-foreground/90">L</span> pulsar
+                    list ·{" "}
+                    <span className="font-mono text-foreground/90">G</span> rings ·{" "}
+                    <span className="font-mono text-foreground/90">A</span> cycle
+                    algorithm ·{" "}
+                    <span className="font-mono text-foreground/90">T</span> cycle
+                    theme ·{" "}
+                    <span className="font-mono text-foreground/90">S</span> audio
+                  </li>
+                  <li>
+                    <span className="font-mono text-foreground/90">M</span> 1972
+                    mode ·{" "}
+                    <span className="font-mono text-foreground/90">[ ]</span>{" "}
+                    pulsar count ·{" "}
+                    <span className="font-mono text-foreground/90">, .</span> ±10
+                    kyr ·{" "}
+                    <span className="font-mono text-foreground/90">{"< >"}</span>{" "}
+                    ±1 Myr ·{" "}
+                    <span className="font-mono text-foreground/90">0</span>{" "}
+                    reset time ·{" "}
+                    <span className="font-mono text-foreground/90">Space</span>{" "}
+                    play/pause time-lapse
+                  </li>
+                  <li>
+                    <span className="font-mono text-foreground/90">Tab</span> /{" "}
+                    <span className="font-mono text-foreground/90">Shift+Tab</span>{" "}
+                    cycle pulsars · arrow keys when locked ·{" "}
                     <span className="font-mono text-foreground/90">?</span> this
                     panel ·{" "}
                     <span className="font-mono text-foreground/90">Esc</span>{" "}
                     close / reset
                   </li>
                   <li>
-                    <span className="font-mono text-foreground/90">Tab</span> /{" "}
-                    <span className="font-mono text-foreground/90">Shift+Tab</span>{" "}
-                    cycle through pulsars · arrow keys when locked
+                    hover a pulsar line to see its info in the footer; click to
+                    lock; click the footer tooltip to copy PSR name/period/dist
                   </li>
                   <li>
-                    hover a pulsar line to see its info in the bottom-left corner
+                    click the <span className="font-mono text-foreground/90">ⓘ</span>{" "}
+                    next to the observer (or press{" "}
+                    <span className="font-mono text-foreground/90">I</span>) for
+                    spectral type, V mag, proper motion, radial velocity, and a
+                    SIMBAD link. The <span className="font-mono text-foreground/90">?</span>{" "}
+                    in that card expands a legend.
                   </li>
                   <li>
-                    click a pulsar line to lock the selection — the info stays
-                    even after the mouse moves away
-                  </li>
-                  <li>
-                    click the bottom-left tooltip to copy the pulsar info
-                    (PSR name, period, distance, l/b) to your clipboard
+                    zoom the plaque with the{" "}
+                    <span className="font-mono text-foreground/90">− / +</span>{" "}
+                    control in the bottom-right; clicking the middle{" "}
+                    <span className="font-mono text-foreground/90">1×</span> resets
                   </li>
                   <li>
                     enter coordinates directly via the "coords" button or in the
@@ -1193,8 +1256,14 @@ function PageInner() {
                     </span>
                   </li>
                   <li>
-                    use the export buttons to download the current map as PNG,
-                    SVG, or print-ready SVG (with title block + legend)
+                    export buttons download the current map as PNG, SVG, or
+                    print-ready SVG. Share links also work as deep-links:{" "}
+                    <span className="font-mono text-foreground/90">/s/sirius</span>,{" "}
+                    <span className="font-mono text-foreground/90">/s/vega</span>, etc.
+                  </li>
+                  <li>
+                    installable as a PWA (browser's "install app") — works
+                    offline once the shell is cached
                   </li>
                 </ul>
               </div>
