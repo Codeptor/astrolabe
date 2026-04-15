@@ -300,13 +300,22 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
           endY + YLAR_EDGE_CHECK > VB_H ||
           endY - YLAR_EDGE_CHECK < 0 ||
           endX - YLAR_EDGE_CHECK < 0
-        // Text placement mirrors 7yl4r's drawPeriod exactly:
+        // Text placement — 7yl4r's drawPeriod with a length-aware cap so the
+        // digits can never be pushed behind the observer.
         //   translate(endpoint); rotate(angle);
-        //   if near edge: translate(-4*PAD, -9);
+        //   if near edge: translate(-shift, -9);
         //   fillText(binary, X_SHIFT, LINE_HEIGHT/2 + Y_SHIFT);
-        // In our pre-rotated <g> frame (origin at Earth), that means
-        // text_x = lineLen [+ dX] + X_SHIFT, text_y = LINE_HEIGHT/2 + Y_SHIFT [+ dY].
-        const textX = nearEdge ? lineLen - YLAR_INWARD_DX + X_SHIFT : lineLen + X_SHIFT
+        // Their fixed 4×PAD inward shift assumes the line is at least that
+        // long. Our viewBox is taller-aspect, so up/down-pointing pulsars
+        // have lines shorter than 4×PAD — using the fixed shift pushed text
+        // past the observer and caused every tucked pulsar to clump at the
+        // centre. Clamp the shift so the text's right edge lands on (or
+        // just before) the endpoint, matching the rule's intent.
+        const desiredInward = Math.min(
+          YLAR_INWARD_DX,
+          Math.max(textLen + 2 * X_SHIFT, 0),
+        )
+        const textX = nearEdge ? lineLen - desiredInward + X_SHIFT : lineLen + X_SHIFT
         const textY = nearEdge
           ? LINE_HEIGHT / 2 + Y_SHIFT + YLAR_INWARD_DY
           : LINE_HEIGHT / 2 + Y_SHIFT
