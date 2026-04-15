@@ -1,8 +1,10 @@
-import { NextRequest } from "next/server"
+import type { APIRoute } from "astro"
 import { resolveStar } from "@/lib/simbad"
 
-export async function GET(request: NextRequest) {
-  const name = request.nextUrl.searchParams.get("name")
+export const prerender = false
+
+export const GET: APIRoute = async ({ url }) => {
+  const name = url.searchParams.get("name")
   if (!name) {
     return Response.json({ error: "missing name parameter" }, { status: 400 })
   }

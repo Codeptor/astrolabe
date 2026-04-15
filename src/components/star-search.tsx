@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import type { Star } from "@/lib/types"
 import { createLatestOnlyRunner } from "@/lib/async-latest"

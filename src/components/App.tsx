@@ -1,8 +1,4 @@
-"use client"
-
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useTheme } from "next-themes"
+import { Component, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Volume2, VolumeOff } from "lucide-react"
 import type { Pulsar, Star, RelativePulsar, PlaqueData } from "@/lib/types"
 import { selectPulsars } from "@/lib/pulsar-selection"
@@ -22,6 +18,7 @@ import {
   parseState,
   buildSearchString,
 } from "@/lib/state"
+import { useTheme } from "@/lib/theme"
 import { applyProperMotion, evolvePeriod } from "@/lib/proper-motion"
 import { playPulsar, playToggleCue, type PulsarVoice } from "@/lib/pulsar-audio"
 import Plaque from "@/components/plaque"
@@ -67,25 +64,63 @@ function observerToOrigin(
   return found ?? SOL
 }
 
-export default function Page() {
-  return (
-    <Suspense fallback={<div className="h-svh" />}>
-      <PageInner />
-    </Suspense>
-  )
+function readSearch(): string {
+  if (typeof window === "undefined") return ""
+  return window.location.search
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(error, info)
+  }
+
+  reset = () => {
+    this.setState({ error: null })
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-svh flex-col items-center justify-center px-6 gap-6">
+          <div className="flex flex-col items-center gap-2 text-center max-w-md">
+            <p
+              className="text-[24px] leading-none text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              signal lost
+            </p>
+            <p className="text-[11px] text-foreground/60">
+              something broke while computing the pulsar map.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={this.reset}
+            className="text-[10px] text-foreground/70 hover:text-foreground transition border border-foreground/20 hover:border-foreground/50 px-3 py-1.5 cursor-pointer"
+          >
+            try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 function PageInner() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { setTheme } = useTheme()
 
   // Parse the URL once on mount, then keep state in React. Updates to state
-  // push to the URL via router.replace so back/forward + bookmarks work.
+  // push to the URL via history.replaceState so back/forward + bookmarks work.
   const initialState = useMemo<AppState>(() => {
     if (typeof window === "undefined") return DEFAULT_STATE
-    return parseState(searchParams ? new URLSearchParams(searchParams.toString()) : new URLSearchParams())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return parseState(new URLSearchParams(window.location.search))
   }, [])
 
   const [appState, setAppState] = useState<AppState>(initialState)
@@ -105,8 +140,8 @@ function PageInner() {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Track the last search string we wrote to the URL, so the URL→state effect
-  // can tell whether a searchParams change came from us (ignore) or from the
+  // Track the last search string we wrote to the URL, so the popstate handler
+  // can tell whether a URL change came from us (ignore) or from the
   // browser back/forward (sync).
   const lastPushedSearch = useRef<string>(buildSearchString(initialState))
 
@@ -121,8 +156,7 @@ function PageInner() {
     })
   }, [])
 
-  // Sync theme to next-themes (which sets the html class and the CSS vars
-  // resolve to whichever theme class is active in globals.css)
+  // Sync theme to the <html> class (theme hook writes both class and localStorage)
   useEffect(() => {
     setTheme(appState.theme)
   }, [appState.theme, setTheme])
@@ -132,19 +166,22 @@ function PageInner() {
     const search = buildSearchString(appState)
     if (search === lastPushedSearch.current) return
     lastPushedSearch.current = search
-    router.replace(`/${search}`, { scroll: false })
-  }, [appState, router])
+    const href = `${window.location.pathname}${search}`
+    window.history.replaceState(null, "", href)
+  }, [appState])
 
   // URL → state: on browser back/forward, sync state from URL.
-  // Skip if the searchParams change came from our own router.replace above.
+  // Skip if the current URL already matches our last pushed search.
   useEffect(() => {
-    if (!searchParams) return
-    const currentSearch = searchParams.toString()
-    const normalized = currentSearch ? `?${currentSearch}` : ""
-    if (normalized === lastPushedSearch.current) return
-    lastPushedSearch.current = normalized
-    setAppState(parseState(new URLSearchParams(currentSearch)))
-  }, [searchParams])
+    const onPop = () => {
+      const currentSearch = readSearch()
+      if (currentSearch === lastPushedSearch.current) return
+      lastPushedSearch.current = currentSearch
+      setAppState(parseState(new URLSearchParams(currentSearch)))
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
 
   // Resolve observer ref → actual coordinates
   const origin = useMemo(
@@ -411,15 +448,12 @@ function PageInner() {
         if (e.shiftKey) handleRandomElsewhere()
         else handleRandomStar()
       } else if (e.key === "l" || e.key === "L") {
-        // l = toggle list sidebar
         if (infoOpen) return
         setSidebarOpen((v) => !v)
       } else if (e.key === "g" || e.key === "G") {
-        // g = toggle scale rings
         if (infoOpen) return
         setAppState((s) => ({ ...s, rings: !s.rings }))
       } else if (e.key === "m" || e.key === "M") {
-        // m = toggle 1972 ↔ custom mode
         if (infoOpen) return
         setAppState((s) => ({
           ...s,
@@ -429,7 +463,6 @@ function PageInner() {
         setLockedPulsar(null)
         setHoveredPulsar(null)
       } else if (e.key === "a" || e.key === "A") {
-        // a = cycle selection algorithm
         if (infoOpen) return
         setAppState((s) => {
           const idx = ALL_ALGORITHMS.indexOf(s.algorithm)
@@ -438,7 +471,6 @@ function PageInner() {
           return { ...s, algorithm: next }
         })
       } else if (e.key === "t" || e.key === "T") {
-        // t = cycle theme
         if (infoOpen) return
         setAppState((s) => {
           const idx = ALL_THEMES.indexOf(s.theme)
@@ -447,7 +479,6 @@ function PageInner() {
           return { ...s, theme: next }
         })
       } else if (e.key === "s" || e.key === "S") {
-        // s = sound (audio) toggle
         if (infoOpen) return
         setAudioEnabled((v) => {
           const next = !v
@@ -456,39 +487,30 @@ function PageInner() {
           return next
         })
       } else if (e.key === "k" || e.key === "K") {
-        // k = open custom coordinates picker
         if (infoOpen || coordOpen || embedOpen) return
         setCoordOpen(true)
       } else if (e.key === "e" || e.key === "E") {
-        // e = open embed/share modal
         if (infoOpen || coordOpen || embedOpen) return
         setEmbedOpen(true)
       } else if (e.key === "[") {
-        // [ = decrease pulsar count
         if (infoOpen) return
         setAppState((s) => ({ ...s, count: Math.max(5, s.count - 1) }))
       } else if (e.key === "]") {
-        // ] = increase pulsar count
         if (infoOpen) return
         setAppState((s) => ({ ...s, count: Math.min(50, s.count + 1) }))
       } else if (e.key === ",") {
-        // , = time machine: -10 kyr
         if (infoOpen) return
         setAppState((s) => ({ ...s, epoch: Math.max(-10_000_000, s.epoch - 10_000) }))
       } else if (e.key === ".") {
-        // . = time machine: +10 kyr
         if (infoOpen) return
         setAppState((s) => ({ ...s, epoch: Math.min(10_000_000, s.epoch + 10_000) }))
       } else if (e.key === "<") {
-        // shift+, = time machine: -1 Myr
         if (infoOpen) return
         setAppState((s) => ({ ...s, epoch: Math.max(-10_000_000, s.epoch - 1_000_000) }))
       } else if (e.key === ">") {
-        // shift+. = time machine: +1 Myr
         if (infoOpen) return
         setAppState((s) => ({ ...s, epoch: Math.min(10_000_000, s.epoch + 1_000_000) }))
       } else if (e.key === "0") {
-        // 0 = reset time machine to now
         if (infoOpen) return
         setAppState((s) => ({ ...s, epoch: 0 }))
       } else if (e.key === "Tab") {
@@ -518,9 +540,11 @@ function PageInner() {
     sidebarOpen,
     lockedPulsar,
     handleRandomStar,
+    handleRandomElsewhere,
     handleReset,
     handlePulsarSelect,
     cyclePulsar,
+    showToast,
     setAppState,
   ])
 
@@ -830,16 +854,8 @@ function PageInner() {
         </div>
       </header>
 
-      {/* Spacer that flex-1 occupies — keeps the layout container honest
-          even though the plaque itself is rendered in a fixed wrapper below
-          so its viewBox vertical center (where the GC line lives) lines up
-          with the viewport vertical center regardless of header height. */}
       <main className="flex-1 min-h-0 relative" />
 
-      {/* Plaque — fixed to viewport so the GC reference line (at viewBox y=350,
-          which is exactly the vertical middle of the viewBox) is centered on
-          the viewport's vertical middle. Header (z-50) sits on top of empty
-          plaque corners; sidebar (z-60) sits on top of everything. */}
       {plaqueData && (
         <div
           className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-48 py-24 transition-[padding] duration-300 ${
@@ -864,8 +880,6 @@ function PageInner() {
         </div>
       )}
 
-      {/* Pulsar list sidebar — only the locked pulsar drives the list's
-          highlight + auto-scroll, so SVG hovers don't make it jump around. */}
       {plaqueData && (
         <PulsarList
           pulsars={plaqueData.pulsars}
@@ -877,14 +891,12 @@ function PageInner() {
         />
       )}
 
-      {/* Custom coordinates picker */}
       <CoordPicker
         open={coordOpen}
         onClose={() => setCoordOpen(false)}
         onSubmit={handleCustomCoords}
       />
 
-      {/* Embed/share modal */}
       <EmbedModal
         open={embedOpen}
         onClose={() => setEmbedOpen(false)}
@@ -892,10 +904,8 @@ function PageInner() {
         onCopy={showToast}
       />
 
-      {/* First-visit onboarding */}
       <Onboarding />
 
-      {/* About modal */}
       {infoOpen && (
         <div
           className="fixed inset-0 z-[100] bg-background/85 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 sm:p-8 overflow-y-auto"
@@ -1108,7 +1118,6 @@ function PageInner() {
         </div>
       )}
 
-      {/* Footer */}
       <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between">
         <div
           className={`min-h-[40px] w-fit ${activePulsar ? "cursor-pointer" : ""}`}
@@ -1124,5 +1133,13 @@ function PageInner() {
         </p>
       </footer>
     </div>
+  )
+}
+
+export function App() {
+  return (
+    <AppErrorBoundary>
+      <PageInner />
+    </AppErrorBoundary>
   )
 }

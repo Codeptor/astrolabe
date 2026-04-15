@@ -1,0 +1,18 @@
+---
+// Runs synchronously in <head> before paint — prevents theme flash.
+---
+<script is:inline>
+  (() => {
+    const key = "astrolabe-theme"
+    const valid = ["dark", "light", "gold", "blueprint"]
+    let t
+    try {
+      t = localStorage.getItem(key)
+    } catch {
+      t = null
+    }
+    if (!valid.includes(t)) t = "dark"
+    document.documentElement.classList.add(t)
+    document.documentElement.style.colorScheme = t === "light" ? "light" : "dark"
+  })()
+</script>

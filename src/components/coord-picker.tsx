@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { raDecToGalactic } from "@/lib/coordinates"
 import type { CustomObserver } from "@/lib/state"
