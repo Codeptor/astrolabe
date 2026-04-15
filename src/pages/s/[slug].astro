@@ -1,0 +1,66 @@
+---
+import starsJson from "../../../public/data/stars.json"
+
+type StarEntry = { name: string; gl: number; gb: number; dist: number; aliases?: string[] }
+
+export function getStaticPaths() {
+  const stars = starsJson as StarEntry[]
+  const slugify = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+  const seen = new Set<string>()
+  return stars
+    .map((s) => ({ slug: slugify(s.name), name: s.name, dist: s.dist }))
+    .filter(({ slug }) => {
+      if (!slug || seen.has(slug)) return false
+      seen.add(slug)
+      return true
+    })
+    .map(({ slug, name, dist }) => ({
+      params: { slug },
+      props: { name, dist, slug },
+    }))
+}
+
+const { name, dist, slug } = Astro.props
+const siteUrl = Astro.site?.toString() ?? "https://astrolabe.bhanueso.dev/"
+const target = `/?from=${encodeURIComponent(name)}`
+const canonical = `${siteUrl}s/${slug}`
+const ogImage = `${siteUrl}og.png?from=${encodeURIComponent(name)}`
+const description = `Pioneer-plaque pulsar map rendered from ${name} (${dist.toFixed(2)} kpc from Sol).`
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{`Astrolabe — from ${name}`}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`Astrolabe — from ${name}`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={`Astrolabe — from ${name}`} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <script is:inline set:html={`window.location.replace(${JSON.stringify(target)});`}></script>
+    <style is:inline>
+      html, body { margin: 0; height: 100%; background: #0a0a10; color: #e0e0e0; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { display: flex; align-items: center; justify-content: center; }
+      a { color: inherit; }
+      p { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.6; }
+    </style>
+  </head>
+  <body>
+    <p>
+      redirecting to <a href={target}>{name}</a>…
+    </p>
+  </body>
+</html>
