@@ -967,7 +967,9 @@ function PageInner() {
                 <span className="font-mono text-foreground/75">C</span> copy link ·{" "}
                 <span className="font-mono text-foreground/75">F</span> fullscreen ·{" "}
                 <span className="font-mono text-foreground/75">V</span> saved views ·{" "}
-                <span className="font-mono text-foreground/75">I</span> star info ·{" "}
+                <span className="font-mono text-foreground/75">I</span> star info
+              </div>
+              <div>
                 <span className="font-mono text-foreground/75">Tab</span> cycle ·{" "}
                 <span className="font-mono text-foreground/75">?</span> help ·{" "}
                 <span className="font-mono text-foreground/75">Esc</span> reset
