@@ -697,29 +697,6 @@ function PageInner() {
                 </button>
               )}
             </span>
-            {enriched && (enriched.spType || enriched.otype || enriched.vmag !== null) && (
-              <>
-                {dot}
-                <span
-                  className="text-foreground/55 text-[9px] uppercase tracking-[0.12em]"
-                  title={[
-                    enriched.spType ? `spectral type ${enriched.spType}` : null,
-                    enriched.otype ? `object type ${enriched.otype}` : null,
-                    enriched.vmag !== null ? `apparent V magnitude ${enriched.vmag.toFixed(2)}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                >
-                  {[
-                    enriched.spType,
-                    enriched.otype,
-                    enriched.vmag !== null ? `V ${enriched.vmag.toFixed(2)}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </>
-            )}
             {dot}
             <span>{distToGC.toFixed(1)} kpc</span>
           </div>
