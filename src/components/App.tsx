@@ -136,6 +136,7 @@ function PageInner() {
   // Audio playback — when enabled, hovering a pulsar plays its period;
   // leaving the pulsar stops it. Off by default (browser autoplay policies).
   const [audioEnabled, setAudioEnabled] = useState(false)
+  const [timePlaying, setTimePlaying] = useState(false)
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -332,7 +333,21 @@ function PageInner() {
     setAppState((s) => ({ ...DEFAULT_STATE, theme: s.theme }))
     setLockedPulsar(null)
     setHoveredPulsar(null)
+    setTimePlaying(false)
   }, [setAppState])
+
+  // Time-lapse tick: advances epoch by one slider step every 50ms,
+  // loops from +10Myr back to -10Myr. Stops on any manual interaction.
+  useEffect(() => {
+    if (!timePlaying) return
+    const id = window.setInterval(() => {
+      setAppState((s) => {
+        const next = s.epoch + 50_000
+        return { ...s, epoch: next > 10_000_000 ? -10_000_000 : next }
+      })
+    }, 50)
+    return () => window.clearInterval(id)
+  }, [timePlaying])
 
   const handleRandomStar = useCallback(() => {
     if (stars.length === 0) return
@@ -512,7 +527,12 @@ function PageInner() {
         setAppState((s) => ({ ...s, epoch: Math.min(10_000_000, s.epoch + 1_000_000) }))
       } else if (e.key === "0") {
         if (infoOpen) return
+        setTimePlaying(false)
         setAppState((s) => ({ ...s, epoch: 0 }))
+      } else if (e.key === " ") {
+        if (infoOpen || coordOpen || embedOpen) return
+        e.preventDefault()
+        setTimePlaying((p) => !p)
       } else if (e.key === "Tab") {
         if (infoOpen || coordOpen || embedOpen) return
         e.preventDefault()
@@ -771,6 +791,16 @@ function PageInner() {
             className="flex items-center gap-1.5 text-[9px] text-foreground/55 select-none"
             style={{ fontFamily: "var(--font-mono)" }}
           >
+            <button
+              type="button"
+              onClick={() => setTimePlaying((p) => !p)}
+              aria-label={timePlaying ? "pause time animation" : "play time animation"}
+              aria-pressed={timePlaying}
+              title={timePlaying ? "pause (space)" : "play time-lapse (space)"}
+              className="text-[10px] text-foreground/75 hover:text-foreground cursor-pointer w-3 text-center focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
+            >
+              {timePlaying ? "⏸" : "▶"}
+            </button>
             <span className="text-foreground/75 w-3 text-right">t</span>
             <span className="text-foreground/30">[</span>
             <input
@@ -779,12 +809,14 @@ function PageInner() {
               max={10_000_000}
               step={50_000}
               value={appState.epoch}
-              onChange={(e) =>
+              onChange={(e) => {
+                setTimePlaying(false)
                 setAppState((s) => ({ ...s, epoch: parseInt(e.target.value, 10) }))
-              }
+              }}
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => {
                 e.stopPropagation()
+                setTimePlaying(false)
                 setAppState((s) => ({ ...s, epoch: 0 }))
               }}
               className="themed-slider"
