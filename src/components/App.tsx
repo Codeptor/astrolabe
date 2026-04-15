@@ -131,6 +131,10 @@ function PageInner() {
   // leaving the pulsar stops it. Off by default (browser autoplay policies).
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [timePlaying, setTimePlaying] = useState(false)
+  const [enriched, setEnriched] = useState<{ spType: string | null; otype: string | null } | null>(
+    null,
+  )
+  const enrichedCache = useRef(new Map<string, { spType: string | null; otype: string | null }>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -183,6 +187,36 @@ function PageInner() {
     () => observerToOrigin(appState.observer, stars),
     [appState.observer, stars],
   )
+
+  // SIMBAD enrichment — fetch spectral type + object type for any observer
+  // except Sol. Cached per-name so repeat visits are instant.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (origin.name === "Sol" || appState.observer.kind !== "star") {
+      setEnriched(null)
+      return
+    }
+    const name = origin.name
+    const cached = enrichedCache.current.get(name)
+    if (cached !== undefined) {
+      setEnriched(cached)
+      return
+    }
+    let cancelled = false
+    setEnriched(null)
+    fetch(`/api/star-resolve?name=${encodeURIComponent(name)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        const e = { spType: data.spType ?? null, otype: data.otype ?? null }
+        enrichedCache.current.set(name, e)
+        setEnriched(e)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [origin.name, appState.observer.kind])
 
   const plaqueData = useMemo<PlaqueData | null>(() => {
     return computePlaqueData(
@@ -625,6 +659,17 @@ function PageInner() {
                 </a>
               )}
             </span>
+            {enriched && (enriched.spType || enriched.otype) && (
+              <>
+                {dot}
+                <span
+                  className="text-foreground/55 text-[9px] uppercase tracking-[0.12em]"
+                  title={[enriched.spType ? `spectral type ${enriched.spType}` : null, enriched.otype ? `object type ${enriched.otype}` : null].filter(Boolean).join(" · ")}
+                >
+                  {[enriched.spType, enriched.otype].filter(Boolean).join(" · ")}
+                </span>
+              </>
+            )}
             {dot}
             <span>{distToGC.toFixed(1)} kpc</span>
           </div>

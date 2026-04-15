@@ -14,6 +14,8 @@ export interface ResolvedStar {
   gb: number
   dist: number // kpc
   source: "simbad"
+  spType: string | null
+  otype: string | null
 }
 
 interface ParsedSimbad {
@@ -22,6 +24,8 @@ interface ParsedSimbad {
   dec: number
   plx: number | null
   plxErr: number | null
+  spType: string | null
+  otype: string | null
 }
 
 function sanitizeTapInput(name: string): string {
@@ -37,7 +41,7 @@ export function buildTapLikeQuery(name: string): string {
   if (tokens.length === 0 || !cleaned) return ""
 
   const pattern = tokens.join("%")
-  return `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value, b.plx_err
+  return `SELECT TOP 1 b.main_id, b.ra, b.dec, b.plx_value, b.plx_err, b.sp_type, b.otype_txt
 FROM basic AS b
 JOIN ident AS i ON b.oid = i.oidref
 WHERE LOWER(i.id) LIKE LOWER('%${pattern}%')
@@ -77,12 +81,23 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
   const iMatch = text.match(/^%I\.0\s+(.+?)\s*$/m)
   const mainId = iMatch ? iMatch[1]!.trim() : name
 
+  // Sesame %S line has format: <sp_type> [confidence-flag] [reference]
+  // e.g. "A0mA1Va C 2003AJ....126.2048G" — strip the confidence + citation
+  // so we ship a clean "A0mA1Va" through the UI.
+  const sMatch = text.match(/^%S\s+(\S+)/m)
+  const spType = sMatch?.[1] ? sMatch[1].trim() : null
+
+  const oMatch = text.match(/^%O\s+(.+?)\s*$/m)
+  const otype = oMatch?.[1] ? oMatch[1].trim() : null
+
   return {
     name: mainId,
     ra,
     dec,
     plx: Number.isFinite(plx) && plx > 0 ? plx : null,
     plxErr: plxErr !== null && Number.isFinite(plxErr) ? plxErr : null,
+    spType,
+    otype,
   }
 }
 
@@ -118,6 +133,8 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
   const plxErrRaw = row[4]
   const plx = plxRaw === null ? null : Number(plxRaw)
   const plxErr = plxErrRaw === null ? null : Number(plxErrRaw)
+  const spTypeRaw = row[5]
+  const otypeRaw = row[6]
 
   if (!Number.isFinite(ra) || !Number.isFinite(dec)) return null
 
@@ -127,6 +144,8 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
     dec,
     plx: plx !== null && Number.isFinite(plx) && plx > 0 ? plx : null,
     plxErr: plxErr !== null && Number.isFinite(plxErr) ? plxErr : null,
+    spType: spTypeRaw === null || spTypeRaw === undefined ? null : String(spTypeRaw).trim() || null,
+    otype: otypeRaw === null || otypeRaw === undefined ? null : String(otypeRaw).trim() || null,
   }
 }
 
@@ -157,5 +176,7 @@ export async function resolveStar(name: string): Promise<ResolvedStar | null> {
     gb: Math.round(gb * 1000) / 1000,
     dist: Math.round(dist * 100000) / 100000,
     source: "simbad",
+    spType: parsed.spType,
+    otype: parsed.otype,
   }
 }
