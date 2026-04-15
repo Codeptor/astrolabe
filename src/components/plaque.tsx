@@ -85,6 +85,7 @@ function binaryTextLen(bits: number): number {
 interface PlaqueProps {
   data: PlaqueData
   activePulsar: RelativePulsar | null
+  lockedPulsar: RelativePulsar | null
   showRings: boolean
   onHover: (pulsar: RelativePulsar | null) => void
   onClick: (pulsar: RelativePulsar | null) => void
@@ -115,6 +116,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
   {
     data,
     activePulsar,
+    lockedPulsar,
     showRings,
     onHover,
     onClick,
@@ -192,9 +194,26 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
       aria-label={ariaLabel}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onClick={(e) => {
+        // Bare-SVG click (not on a pulsar line) = unlock.
+        if (e.target === e.currentTarget) onClick(null)
+      }}
     >
       <title>Astrolabe pulsar map from {data.origin.name}</title>
       <desc>{ariaLabel}</desc>
+
+      {/* Background hit-rect so clicks anywhere off a pulsar still unlock */}
+      <rect
+        x={0}
+        y={0}
+        width={VB_W}
+        height={VB_H}
+        fill="transparent"
+        onClick={(e) => {
+          e.stopPropagation()
+          onClick(null)
+        }}
+      />
 
       {/* Distance scale rings (toggleable) */}
       {showRings && (
@@ -315,7 +334,8 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
               onMouseLeave={() => onHover(null)}
               onClick={(e) => {
                 e.stopPropagation()
-                onClick(isActive ? null : rp)
+                const isLocked = lockedPulsar?.pulsar.name === rp.pulsar.name
+                onClick(isLocked ? null : rp)
               }}
             />
             {/* Smooth line: distance + Z-offset */}

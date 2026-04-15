@@ -1041,6 +1041,7 @@ function PageInner() {
               ref={svgRef}
               data={plaqueData}
               activePulsar={activePulsar}
+              lockedPulsar={lockedPulsar}
               showRings={appState.rings}
               onHover={setHoveredPulsar}
               onClick={handlePulsarSelect}

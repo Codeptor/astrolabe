@@ -96,6 +96,7 @@ function PlaqueSide({
               <Plaque
                 data={data}
                 activePulsar={active}
+                lockedPulsar={active}
                 showRings={false}
                 onHover={setActive}
                 onClick={(rp) => setActive(rp)}
