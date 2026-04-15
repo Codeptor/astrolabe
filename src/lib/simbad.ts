@@ -56,7 +56,6 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
   try {
     response = await fetch(`${SESAME_URL}?${encodeURIComponent(name)}`, {
       headers: { Accept: "text/plain" },
-      next: { revalidate: 86400 },
     })
   } catch {
     return null
@@ -102,7 +101,6 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
   try {
     response = await fetch(`${SIMBAD_TAP}?${params}`, {
       headers: { Accept: "application/json" },
-      next: { revalidate: 86400 },
     })
   } catch {
     return null
