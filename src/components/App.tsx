@@ -24,6 +24,7 @@ import { PulsarList } from "@/components/pulsar-list"
 import { CoordPicker } from "@/components/coord-picker"
 import { EmbedModal } from "@/components/embed-modal"
 import { SavedViews } from "@/components/saved-views"
+import { StarInfoCard, type StarInfo } from "@/components/star-info-card"
 import { Onboarding } from "@/components/onboarding"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
@@ -132,14 +133,10 @@ function PageInner() {
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [timePlaying, setTimePlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
-  const [enriched, setEnriched] = useState<{
-    spType: string | null
-    otype: string | null
-    vmag: number | null
-  } | null>(null)
-  const enrichedCache = useRef(
-    new Map<string, { spType: string | null; otype: string | null; vmag: number | null }>(),
-  )
+  const [enriched, setEnriched] = useState<StarInfo | null>(null)
+  const [infoCardOpen, setInfoCardOpen] = useState(false)
+  const [infoCardAnchor, setInfoCardAnchor] = useState<{ top: number; left: number } | null>(null)
+  const enrichedCache = useRef(new Map<string, StarInfo>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -205,7 +202,19 @@ function PageInner() {
     }
     const name = origin.name
     if (name === "Sol" || name === "Sun" || name === "Earth") {
-      setEnriched({ spType: "G2V", otype: "Star", vmag: -26.74 })
+      setEnriched({
+        name,
+        spType: "G2V",
+        otype: "Star",
+        vmag: -26.74,
+        pmra: null,
+        pmdec: null,
+        radvel: null,
+        nbref: null,
+        dist: 0,
+        gl: 0,
+        gb: 0,
+      })
       return
     }
     const cached = enrichedCache.current.get(name)
@@ -219,10 +228,18 @@ function PageInner() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return
-        const e = {
+        const e: StarInfo = {
+          name: data.name ?? name,
           spType: data.spType ?? null,
           otype: data.otype ?? null,
           vmag: typeof data.vmag === "number" ? data.vmag : null,
+          pmra: typeof data.pmra === "number" ? data.pmra : null,
+          pmdec: typeof data.pmdec === "number" ? data.pmdec : null,
+          radvel: typeof data.radvel === "number" ? data.radvel : null,
+          nbref: typeof data.nbref === "number" ? data.nbref : null,
+          dist: typeof data.dist === "number" ? data.dist : origin.dist,
+          gl: typeof data.gl === "number" ? data.gl : origin.gl,
+          gb: typeof data.gb === "number" ? data.gb : origin.gb,
         }
         enrichedCache.current.set(name, e)
         setEnriched(e)
@@ -231,7 +248,7 @@ function PageInner() {
     return () => {
       cancelled = true
     }
-  }, [origin.name, appState.observer.kind])
+  }, [origin.name, appState.observer.kind, origin.dist, origin.gl, origin.gb])
 
   const plaqueData = useMemo<PlaqueData | null>(() => {
     return computePlaqueData(
@@ -662,17 +679,22 @@ function PageInner() {
             {dot}
             <span className="flex items-center gap-1">
               from {origin.name}
-              {appState.observer.kind === "star" && origin.name !== "Sol" && (
-                <a
-                  href={`https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${encodeURIComponent(origin.name)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`open ${origin.name} on SIMBAD`}
-                  aria-label={`open ${origin.name} on SIMBAD`}
-                  className="text-foreground/40 hover:text-foreground transition text-[11px] leading-none"
+              {appState.observer.kind === "star" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setInfoCardAnchor({ top: rect.bottom + 6, left: rect.left - 8 })
+                    setInfoCardOpen((v) => !v)
+                  }}
+                  title={`info for ${origin.name}`}
+                  aria-label={`more info on ${origin.name}`}
+                  aria-expanded={infoCardOpen}
+                  className="text-foreground/40 hover:text-foreground transition text-[11px] leading-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
                 >
-                  ↗
-                </a>
+                  ⓘ
+                </button>
               )}
             </span>
             {enriched && (enriched.spType || enriched.otype || enriched.vmag !== null) && (
@@ -1003,6 +1025,14 @@ function PageInner() {
           setTimePlaying(false)
         }}
         onToast={showToast}
+      />
+
+      <StarInfoCard
+        open={infoCardOpen}
+        anchor={infoCardAnchor}
+        info={enriched}
+        loading={!enriched && appState.observer.kind === "star"}
+        onClose={() => setInfoCardOpen(false)}
       />
 
       <Onboarding />

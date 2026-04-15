@@ -17,6 +17,10 @@ export interface ResolvedStar {
   spType: string | null
   otype: string | null
   vmag: number | null
+  pmra: number | null // mas/yr
+  pmdec: number | null // mas/yr
+  radvel: number | null // km/s
+  nbref: number | null
 }
 
 interface ParsedSimbad {
@@ -28,6 +32,10 @@ interface ParsedSimbad {
   spType: string | null
   otype: string | null
   vmag: number | null
+  pmra: number | null
+  pmdec: number | null
+  radvel: number | null
+  nbref: number | null
 }
 
 function sanitizeTapInput(name: string): string {
@@ -45,6 +53,7 @@ export function buildTapLikeQuery(name: string): string {
   const pattern = tokens.join("%")
   return `SELECT TOP 1
   b.main_id, b.ra, b.dec, b.plx_value, b.plx_err, b.sp_type, b.otype_txt,
+  b.pmra, b.pmdec, b.rvz_radvel, b.nbref,
   (SELECT TOP 1 f.flux FROM flux AS f WHERE f.oidref = b.oid AND f.filter = 'V') AS vmag
 FROM basic AS b
 JOIN ident AS i ON b.oid = i.oidref
@@ -99,6 +108,18 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
   const vmagRaw = vMatch ? parseFloat(vMatch[1]!) : NaN
   const vmag = Number.isFinite(vmagRaw) ? vmagRaw : null
 
+  // Sesame proper motion: "%P <pmra> <pmdec> [err_maj err_min pa]"
+  const pmMatch = text.match(/^%P\s+([-\d.]+)\s+([-\d.]+)/m)
+  const pmraRaw = pmMatch ? parseFloat(pmMatch[1]!) : NaN
+  const pmdecRaw = pmMatch ? parseFloat(pmMatch[2]!) : NaN
+  const pmra = Number.isFinite(pmraRaw) ? pmraRaw : null
+  const pmdec = Number.isFinite(pmdecRaw) ? pmdecRaw : null
+
+  // Sesame radial velocity: "%V v <value>" or "%V z <value>"
+  const rvMatch = text.match(/^%V\s+v\s+([-\d.]+)/m)
+  const radvelRaw = rvMatch ? parseFloat(rvMatch[1]!) : NaN
+  const radvel = Number.isFinite(radvelRaw) ? radvelRaw : null
+
   return {
     name: mainId,
     ra,
@@ -108,6 +129,10 @@ async function resolveSesame(name: string): Promise<ParsedSimbad | null> {
     spType,
     otype,
     vmag,
+    pmra,
+    pmdec,
+    radvel,
+    nbref: null,
   }
 }
 
@@ -145,11 +170,19 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
   const plxErr = plxErrRaw === null ? null : Number(plxErrRaw)
   const spTypeRaw = row[5]
   const otypeRaw = row[6]
-  const vmagRaw = row[7]
+  const pmraRaw = row[7]
+  const pmdecRaw = row[8]
+  const radvelRaw = row[9]
+  const nbrefRaw = row[10]
+  const vmagRaw = row[11]
 
   if (!Number.isFinite(ra) || !Number.isFinite(dec)) return null
 
-  const vmagParsed = vmagRaw === null || vmagRaw === undefined ? NaN : Number(vmagRaw)
+  const coerceNum = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
 
   return {
     name: mainId,
@@ -159,7 +192,11 @@ async function resolveTapLike(name: string): Promise<ParsedSimbad | null> {
     plxErr: plxErr !== null && Number.isFinite(plxErr) ? plxErr : null,
     spType: spTypeRaw === null || spTypeRaw === undefined ? null : String(spTypeRaw).trim() || null,
     otype: otypeRaw === null || otypeRaw === undefined ? null : String(otypeRaw).trim() || null,
-    vmag: Number.isFinite(vmagParsed) ? vmagParsed : null,
+    vmag: coerceNum(vmagRaw),
+    pmra: coerceNum(pmraRaw),
+    pmdec: coerceNum(pmdecRaw),
+    radvel: coerceNum(radvelRaw),
+    nbref: coerceNum(nbrefRaw),
   }
 }
 
@@ -184,6 +221,9 @@ export async function resolveStar(name: string): Promise<ResolvedStar | null> {
   const dist = 1 / parsed.plx
   const { gl, gb } = raDecToGalactic(parsed.ra, parsed.dec)
 
+  const r2 = (n: number | null, scale = 100) =>
+    n === null ? null : Math.round(n * scale) / scale
+
   return {
     name: parsed.name,
     gl: Math.round(gl * 1000) / 1000,
@@ -192,6 +232,10 @@ export async function resolveStar(name: string): Promise<ResolvedStar | null> {
     source: "simbad",
     spType: parsed.spType,
     otype: parsed.otype,
-    vmag: parsed.vmag === null ? null : Math.round(parsed.vmag * 100) / 100,
+    vmag: r2(parsed.vmag),
+    pmra: r2(parsed.pmra, 100),
+    pmdec: r2(parsed.pmdec, 100),
+    radvel: r2(parsed.radvel, 100),
+    nbref: parsed.nbref,
   }
 }
