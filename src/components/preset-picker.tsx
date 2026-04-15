@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
-import { PRESETS, type PresetDef } from "@/lib/presets"
+import { VIEW_PRESETS, type ViewPreset } from "@/lib/view-presets"
 
 interface PresetPickerProps {
-  onApply: (preset: PresetDef) => void
+  onApply: (preset: ViewPreset) => void
 }
 
 export function PresetPicker({ onApply }: PresetPickerProps) {
@@ -39,7 +39,7 @@ export function PresetPicker({ onApply }: PresetPickerProps) {
           className="absolute right-0 top-full mt-1 z-50 bg-background border border-foreground/15 min-w-[260px]"
           onClick={(e) => e.stopPropagation()}
         >
-          {PRESETS.map((p) => (
+          {VIEW_PRESETS.map((p) => (
             <button
               key={p.id}
               type="button"

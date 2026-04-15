@@ -31,7 +31,7 @@ import { PulsarInfoCard } from "@/components/pulsar-info-card"
 import { TourOverlay } from "@/components/tour-overlay"
 import { TOUR } from "@/lib/tour"
 import { PresetPicker } from "@/components/preset-picker"
-import type { PresetDef } from "@/lib/presets"
+import type { ViewPreset } from "@/lib/view-presets"
 import { Onboarding } from "@/components/onboarding"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
@@ -910,7 +910,7 @@ function PageInner() {
               tour
             </button>
             <PresetPicker
-              onApply={(preset: PresetDef) => {
+              onApply={(preset: ViewPreset) => {
                 setAppState(() => ({ ...preset.state, theme: appState.theme }))
                 setLockedPulsar(null)
                 setHoveredPulsar(null)

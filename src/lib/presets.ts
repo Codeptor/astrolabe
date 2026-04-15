@@ -16,6 +16,7 @@ export const THEMES: ThemeMeta[] = [
   { id: "light",     label: "light",     swatch: "#fafafa", fg: "#1a1a1a", bg: "#fafafa" },
   { id: "gold",      label: "gold",      swatch: "#f0d9a8", fg: "#1a0e02", bg: "#f0d9a8" },
   { id: "blueprint", label: "blueprint", swatch: "#08153a", fg: "#9ce4ff", bg: "#08153a" },
+  { id: "plaque",    label: "plaque",    swatch: "#c59954", fg: "#352510", bg: "#c59954" },
 ]
 
 export function themeColors(theme: Theme): { fg: string; bg: string } {
