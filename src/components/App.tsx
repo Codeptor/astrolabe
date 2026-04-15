@@ -134,6 +134,8 @@ function PageInner() {
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [timePlaying, setTimePlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const panDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const [enriched, setEnriched] = useState<StarInfo | null>(null)
   const [infoCardOpen, setInfoCardOpen] = useState(false)
   const [infoCardAnchor, setInfoCardAnchor] = useState<{ top: number; left: number } | null>(null)
@@ -350,6 +352,7 @@ function PageInner() {
     setHoveredPulsar(null)
     setTimePlaying(false)
     setZoom(1)
+    setPan({ x: 0, y: 0 })
   }, [setAppState])
 
   // Time-lapse tick: advances epoch by one slider step every 50ms,
@@ -990,8 +993,49 @@ function PageInner() {
       >
         {plaqueData && (
           <div
-            className="w-full h-full pointer-events-auto transition-transform duration-200 ease-out will-change-transform"
-            style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+            className={`w-full h-full pointer-events-auto will-change-transform ${
+              panDragRef.current ? "" : "transition-transform duration-200 ease-out"
+            } ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "center",
+            }}
+            onWheel={(e) => {
+              if (!e.ctrlKey && !e.metaKey && !e.shiftKey) return
+              e.preventDefault()
+              const delta = -Math.sign(e.deltaY) * 0.25
+              setZoom((z) => Math.max(0.5, Math.min(3, Math.round((z + delta) * 100) / 100)))
+            }}
+            onPointerDown={(e) => {
+              if (zoom <= 1) return
+              if (e.button !== 0) return
+              const target = e.target as HTMLElement
+              // Don't start a pan if the user actually clicked a pulsar line /
+              // button inside the SVG — only drag empty space.
+              if (target.closest('g[role="button"]')) return
+              panDragRef.current = {
+                startX: e.clientX,
+                startY: e.clientY,
+                origX: pan.x,
+                origY: pan.y,
+              }
+              ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              const drag = panDragRef.current
+              if (!drag) return
+              const dx = e.clientX - drag.startX
+              const dy = e.clientY - drag.startY
+              setPan({ x: drag.origX + dx, y: drag.origY + dy })
+            }}
+            onPointerUp={(e) => {
+              if (!panDragRef.current) return
+              panDragRef.current = null
+              ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+            }}
+            onPointerCancel={() => {
+              panDragRef.current = null
+            }}
           >
             <Plaque
               ref={svgRef}
@@ -1360,9 +1404,12 @@ function PageInner() {
               </button>
               <button
                 type="button"
-                onClick={() => setZoom(1)}
+                onClick={() => {
+                  setZoom(1)
+                  setPan({ x: 0, y: 0 })
+                }}
                 aria-label="reset zoom"
-                title="reset zoom"
+                title="reset zoom and pan"
                 className="px-1.5 py-0.5 border-x border-foreground/15 tabular-nums w-[52px] text-center hover:bg-foreground/10 hover:text-foreground cursor-pointer transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
               >
                 {zoom.toFixed(zoom === Math.round(zoom) ? 0 : 2)}×
