@@ -268,14 +268,36 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         // GC stays fixed at angle 0 — rotate pulsars by -gcAngle around the observer
         const renderAngle = isAtGC ? rp.angle : rp.angle - gcAngle
 
-        // Cap total radial extent (smooth line + binary text) to viewBox edges.
-        // Floor is 0 not 8 — a hardcoded minimum lets long-binary pulsars push
-        // text past the edge and clip in exports.
+        // 7yl4r approach: clamp only the LINE to the viewBox, then tweak the
+        // binary text inward when the endpoint is near a viewBox edge. Keeps
+        // the line's true length whenever geometrically possible, and only
+        // shortens the digit tail to fit — which looks more faithful to the
+        // original Pioneer plaque aesthetic than shrinking the whole line.
         const binaryStr = periodToBinaryString(rp.pulsar.p0)
         const textLen = binaryTextLen(binaryStr.length)
         const directionalMax = maxRadialLen(renderAngle)
-        const maxLineLen = Math.max(directionalMax - textLen, 0)
-        const totalLen = Math.min(distPx + zPx, maxLineLen)
+        const lineLen = Math.min(distPx + zPx, directionalMax)
+
+        // Endpoint in viewBox coordinates (SVG y is down — hence -sin).
+        const endX = EARTH_X + Math.cos(renderAngle) * lineLen
+        const endY = EARTH_Y - Math.sin(renderAngle) * lineLen
+
+        // 7yl4r's tweakBinaryPosition: if endpoint is within 3 × PAD of top,
+        // bottom, or left edge, flip the binary inward so digits don't
+        // overflow. Scaled to our PAD/FONT_SIZE (≈ FONT_SIZE * 3) so the rule
+        // triggers at the same relative distance their 1200px canvas does.
+        const edgeSlack = FONT_SIZE * 3
+        const nearEdge =
+          endY + edgeSlack > VB_H ||
+          endY - edgeSlack < 0 ||
+          endX - edgeSlack < 0 ||
+          endX + edgeSlack > VB_W
+        // In the rotated local frame the text is normally at `lineLen + X_SHIFT`
+        // (after the endpoint). When the endpoint is near an edge we anchor
+        // the text just BEFORE the endpoint so its right side lands on it.
+        const textX = nearEdge ? lineLen - X_SHIFT - textLen : lineLen + X_SHIFT
+        const hitStart = nearEdge ? textX : 0
+        const hitEnd = nearEdge ? lineLen : textX + textLen
 
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
         const strokeClass = isActive ? "stroke-accent" : "stroke-line"
@@ -285,8 +307,6 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
 
         // SVG rotate is CW, our angles are CCW math → negate
         const rotDeg = (-renderAngle * 180) / Math.PI
-
-        const hitLen = totalLen + binaryStr.length * CHAR_WIDTH
 
         return (
           <g
@@ -301,16 +321,16 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
             role="button"
             aria-label={`PSR ${rp.pulsar.name}, period ${(rp.pulsar.p0 * 1000).toFixed(2)} milliseconds, distance ${rp.dist.toFixed(2)} kiloparsecs`}
           >
-            {/* Invisible hit area — covers smooth line + binary text width */}
+            {/* Invisible hit area — spans line + binary text in local frame */}
             <line
-              x1={0}
+              x1={hitStart}
               y1={0}
-              x2={hitLen}
+              x2={hitEnd}
               y2={0}
               stroke="transparent"
               strokeWidth={16}
               className="cursor-pointer"
-              style={{ transition: `x2 ${TRANSITION}` }}
+              style={{ transition: `x1 ${TRANSITION}, x2 ${TRANSITION}` }}
               onMouseEnter={() => onHover(rp)}
               onMouseLeave={() => onHover(null)}
               onClick={(e) => {
@@ -318,11 +338,11 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
                 onClick(isActive ? null : rp)
               }}
             />
-            {/* Smooth line: distance + Z-offset */}
+            {/* Smooth line: distance + Z-offset, true length */}
             <line
               x1={0}
               y1={0}
-              x2={totalLen}
+              x2={lineLen}
               y2={0}
               strokeWidth={w}
               className={strokeClass}
@@ -331,13 +351,12 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
                 transition: `x2 ${TRANSITION}, stroke-width 200ms ease-out`,
               }}
             />
-            {/* Binary period text — sits at (totalLen + X_SHIFT, 0) in the
-                rotated frame so it rides the line endpoint as it moves.
-                textLength + lengthAdjust forces the rendered width to exactly
-                match binaryTextLen() so the viewBox clamp never under-estimates
-                and lets glyphs escape the edge during export. */}
+            {/* Binary period text — at (textX, 0) in the rotated frame;
+                lands after the endpoint normally, flipped inward when
+                the endpoint is near a viewBox edge. textLength +
+                lengthAdjust forces rendered width to match binaryTextLen(). */}
             <text
-              x={totalLen + X_SHIFT}
+              x={textX}
               y={LINE_HEIGHT / 2 + Y_SHIFT}
               textLength={binaryStr.length * CHAR_WIDTH}
               lengthAdjust="spacingAndGlyphs"
