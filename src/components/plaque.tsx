@@ -285,25 +285,34 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         const endX = EARTH_X + Math.cos(renderAngle) * lineLen
         const endY = EARTH_Y - Math.sin(renderAngle) * lineLen
 
-        // tweakBinaryPosition: flip the binary inward ONLY when placing it
-        // past the endpoint would actually overflow the viewBox. Check the
-        // would-be far end of the text in viewBox coordinates (not just the
-        // endpoint's distance to the edge), so most pulsars keep the default
-        // outward placement and only the few whose digits truly don't fit
-        // get flipped.
-        const textEndX = endX + Math.cos(renderAngle) * (X_SHIFT + textLen)
-        const textEndY = endY - Math.sin(renderAngle) * (X_SHIFT + textLen)
+        // 7yl4r tweakBinaryPosition, ported 1:1 from their drawMap.js.
+        // Their PAD = 50 on a 1200-wide canvas; we scale by viewBox width
+        // so the thresholds and offsets stay proportional.
+        //   if (y + 3*PAD > h || y - 3*PAD < 0 || x - 3*PAD < 0)
+        //     translate(-4*PAD, -9)
+        // No right-edge check (their layout anchors GC to the right, so
+        // flipping pulsars pointed that way causes more harm than good).
+        const YLAR_PAD = (50 * VB_W) / 1200
+        const YLAR_EDGE_CHECK = 3 * YLAR_PAD
+        const YLAR_INWARD_DX = 4 * YLAR_PAD
+        const YLAR_INWARD_DY = (-9 * VB_H) / 1200
         const nearEdge =
-          textEndX < PAD ||
-          textEndX > VB_W - PAD ||
-          textEndY < PAD ||
-          textEndY > VB_H - PAD
-        // In the rotated local frame the text is normally at `lineLen + X_SHIFT`
-        // (after the endpoint). When the endpoint is near an edge we anchor
-        // the text just BEFORE the endpoint so its right side lands on it.
-        const textX = nearEdge ? lineLen - X_SHIFT - textLen : lineLen + X_SHIFT
-        const hitStart = nearEdge ? textX : 0
-        const hitEnd = nearEdge ? lineLen : textX + textLen
+          endY + YLAR_EDGE_CHECK > VB_H ||
+          endY - YLAR_EDGE_CHECK < 0 ||
+          endX - YLAR_EDGE_CHECK < 0
+        // Text placement mirrors 7yl4r's drawPeriod exactly:
+        //   translate(endpoint); rotate(angle);
+        //   if near edge: translate(-4*PAD, -9);
+        //   fillText(binary, X_SHIFT, LINE_HEIGHT/2 + Y_SHIFT);
+        // In our pre-rotated <g> frame (origin at Earth), that means
+        // text_x = lineLen [+ dX] + X_SHIFT, text_y = LINE_HEIGHT/2 + Y_SHIFT [+ dY].
+        const textX = nearEdge ? lineLen - YLAR_INWARD_DX + X_SHIFT : lineLen + X_SHIFT
+        const textY = nearEdge
+          ? LINE_HEIGHT / 2 + Y_SHIFT + YLAR_INWARD_DY
+          : LINE_HEIGHT / 2 + Y_SHIFT
+        // Hit span: cover both line and text wherever text sits.
+        const hitStart = Math.min(0, textX)
+        const hitEnd = Math.max(lineLen, textX + textLen)
 
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
         const strokeClass = isActive ? "stroke-accent" : "stroke-line"
@@ -363,7 +372,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
                 lengthAdjust forces rendered width to match binaryTextLen(). */}
             <text
               x={textX}
-              y={LINE_HEIGHT / 2 + Y_SHIFT}
+              y={textY}
               textLength={binaryStr.length * CHAR_WIDTH}
               lengthAdjust="spacingAndGlyphs"
               className={fillClass}
@@ -371,7 +380,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
                 fontSize: `${FONT_SIZE}px`,
                 fontFamily: "Asset, monospace",
                 pointerEvents: "none",
-                transition: `x ${TRANSITION}`,
+                transition: `x ${TRANSITION}, y ${TRANSITION}`,
               }}
             >
               {binaryStr}
