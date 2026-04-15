@@ -1208,7 +1208,7 @@ function PageInner() {
         </div>
       )}
 
-      <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between">
+      <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between relative z-50">
         <div
           className={`min-h-[40px] w-fit ${activePulsar ? "cursor-pointer" : ""}`}
           onClick={(e) => {
