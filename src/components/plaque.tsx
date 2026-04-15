@@ -64,7 +64,10 @@ function endpoint(angle: number, len: number): { x: number; y: number } {
 function maxRadialLen(angle: number): number {
   const cx = Math.cos(angle)
   const cy = -Math.sin(angle) // SVG y-down
-  const innerPad = PAD + FONT_SIZE
+  // Line-only clamp: only PAD of breathing room is needed now that the
+  // binary text uses its own inward-flip rule; the old FONT_SIZE buffer
+  // was reserving space the text no longer demands past the endpoint.
+  const innerPad = PAD
   let len = Infinity
   if (cx > 1e-6) len = Math.min(len, (VB_W - innerPad - EARTH_X) / cx)
   if (cx < -1e-6) len = Math.min(len, (EARTH_X - innerPad) / -cx)
@@ -282,11 +285,11 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         const endX = EARTH_X + Math.cos(renderAngle) * lineLen
         const endY = EARTH_Y - Math.sin(renderAngle) * lineLen
 
-        // 7yl4r's tweakBinaryPosition: if endpoint is within 3 × PAD of top,
-        // bottom, or left edge, flip the binary inward so digits don't
-        // overflow. Scaled to our PAD/FONT_SIZE (≈ FONT_SIZE * 3) so the rule
-        // triggers at the same relative distance their 1200px canvas does.
-        const edgeSlack = FONT_SIZE * 3
+        // tweakBinaryPosition: flip the binary inward when the endpoint
+        // doesn't have room for the digits past it. Threshold is the
+        // actual digit width plus X_SHIFT, per-pulsar — so short codes
+        // keep their outward placement longer than long codes.
+        const edgeSlack = textLen + X_SHIFT
         const nearEdge =
           endY + edgeSlack > VB_H ||
           endY - edgeSlack < 0 ||
