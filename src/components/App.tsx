@@ -915,7 +915,7 @@ function PageInner() {
       <main
         id="main"
         aria-label="pulsar map"
-        className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-48 py-24 transition-[padding] duration-300 ${
+        className={`fixed inset-0 z-0 flex items-center justify-center pointer-events-none px-6 sm:px-12 md:px-20 py-16 sm:py-20 transition-[padding] duration-300 ${
           sidebarOpen ? "md:pl-[324px]" : ""
         }`}
       >
