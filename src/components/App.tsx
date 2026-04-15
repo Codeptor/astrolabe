@@ -30,6 +30,7 @@ import { AlgorithmPicker } from "@/components/algorithm-picker"
 import { PulsarList } from "@/components/pulsar-list"
 import { CoordPicker } from "@/components/coord-picker"
 import { EmbedModal } from "@/components/embed-modal"
+import { SavedViews } from "@/components/saved-views"
 import { Onboarding } from "@/components/onboarding"
 
 const DEG = Math.PI / 180
@@ -133,6 +134,7 @@ function PageInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [coordOpen, setCoordOpen] = useState(false)
   const [embedOpen, setEmbedOpen] = useState(false)
+  const [viewsOpen, setViewsOpen] = useState(false)
   // Audio playback — when enabled, hovering a pulsar plays its period;
   // leaving the pulsar stops it. Off by default (browser autoplay policies).
   const [audioEnabled, setAudioEnabled] = useState(false)
@@ -439,6 +441,10 @@ function PageInner() {
           setCoordOpen(false)
           return
         }
+        if (viewsOpen) {
+          setViewsOpen(false)
+          return
+        }
         if (embedOpen) {
           setEmbedOpen(false)
           return
@@ -502,11 +508,14 @@ function PageInner() {
           return next
         })
       } else if (e.key === "k" || e.key === "K") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         setCoordOpen(true)
       } else if (e.key === "e" || e.key === "E") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         setEmbedOpen(true)
+      } else if (e.key === "v" || e.key === "V") {
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
+        setViewsOpen((v) => !v)
       } else if (e.key === "[") {
         if (infoOpen) return
         setAppState((s) => ({ ...s, count: Math.max(5, s.count - 1) }))
@@ -530,21 +539,21 @@ function PageInner() {
         setTimePlaying(false)
         setAppState((s) => ({ ...s, epoch: 0 }))
       } else if (e.key === " ") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         e.preventDefault()
         setTimePlaying((p) => !p)
       } else if (e.key === "Tab") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         e.preventDefault()
         cyclePulsar(e.shiftKey ? -1 : 1)
       } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         if (lockedPulsar) {
           e.preventDefault()
           cyclePulsar(1)
         }
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-        if (infoOpen || coordOpen || embedOpen) return
+        if (infoOpen || coordOpen || embedOpen || viewsOpen) return
         if (lockedPulsar) {
           e.preventDefault()
           cyclePulsar(-1)
@@ -557,6 +566,7 @@ function PageInner() {
     infoOpen,
     coordOpen,
     embedOpen,
+    viewsOpen,
     sidebarOpen,
     lockedPulsar,
     handleRandomStar,
@@ -935,6 +945,19 @@ function PageInner() {
         onClose={() => setEmbedOpen(false)}
         state={appState}
         onCopy={showToast}
+      />
+
+      <SavedViews
+        open={viewsOpen}
+        onClose={() => setViewsOpen(false)}
+        state={appState}
+        onApply={(next) => {
+          setAppState(next)
+          setLockedPulsar(null)
+          setHoveredPulsar(null)
+          setTimePlaying(false)
+        }}
+        onToast={showToast}
       />
 
       <Onboarding />
