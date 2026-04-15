@@ -285,16 +285,19 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         const endX = EARTH_X + Math.cos(renderAngle) * lineLen
         const endY = EARTH_Y - Math.sin(renderAngle) * lineLen
 
-        // tweakBinaryPosition: flip the binary inward when the endpoint
-        // doesn't have room for the digits past it. Threshold is the
-        // actual digit width plus X_SHIFT, per-pulsar — so short codes
-        // keep their outward placement longer than long codes.
-        const edgeSlack = textLen + X_SHIFT
+        // tweakBinaryPosition: flip the binary inward ONLY when placing it
+        // past the endpoint would actually overflow the viewBox. Check the
+        // would-be far end of the text in viewBox coordinates (not just the
+        // endpoint's distance to the edge), so most pulsars keep the default
+        // outward placement and only the few whose digits truly don't fit
+        // get flipped.
+        const textEndX = endX + Math.cos(renderAngle) * (X_SHIFT + textLen)
+        const textEndY = endY - Math.sin(renderAngle) * (X_SHIFT + textLen)
         const nearEdge =
-          endY + edgeSlack > VB_H ||
-          endY - edgeSlack < 0 ||
-          endX - edgeSlack < 0 ||
-          endX + edgeSlack > VB_W
+          textEndX < PAD ||
+          textEndX > VB_W - PAD ||
+          textEndY < PAD ||
+          textEndY > VB_H - PAD
         // In the rotated local frame the text is normally at `lineLen + X_SHIFT`
         // (after the endpoint). When the endpoint is near an edge we anchor
         // the text just BEFORE the endpoint so its right side lands on it.
