@@ -26,6 +26,7 @@ import { CoordPicker } from "@/components/coord-picker"
 import { EmbedModal } from "@/components/embed-modal"
 import { SavedViews } from "@/components/saved-views"
 import { StarInfoCard, type StarInfo } from "@/components/star-info-card"
+import { PulsarInfoCard } from "@/components/pulsar-info-card"
 import { Onboarding } from "@/components/onboarding"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
@@ -139,6 +140,8 @@ function PageInner() {
   const [enriched, setEnriched] = useState<StarInfo | null>(null)
   const [infoCardOpen, setInfoCardOpen] = useState(false)
   const [infoCardAnchor, setInfoCardAnchor] = useState<{ top: number; left: number } | null>(null)
+  const [pulsarCardOpen, setPulsarCardOpen] = useState(false)
+  const [pulsarCardAnchor, setPulsarCardAnchor] = useState<{ top: number; left: number } | null>(null)
   const enrichedCache = useRef(new Map<string, StarInfo>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -450,6 +453,10 @@ function PageInner() {
       if (document.activeElement?.tagName === "TEXTAREA") return
 
       if (e.key === "Escape") {
+        if (pulsarCardOpen) {
+          setPulsarCardOpen(false)
+          return
+        }
         if (infoCardOpen) {
           setInfoCardOpen(false)
           return
@@ -620,6 +627,7 @@ function PageInner() {
     embedOpen,
     viewsOpen,
     infoCardOpen,
+    pulsarCardOpen,
     sidebarOpen,
     lockedPulsar,
     handleRandomStar,
@@ -1101,6 +1109,13 @@ function PageInner() {
         onClose={() => setInfoCardOpen(false)}
       />
 
+      <PulsarInfoCard
+        open={pulsarCardOpen}
+        anchor={pulsarCardAnchor}
+        pulsar={lockedPulsar}
+        onClose={() => setPulsarCardOpen(false)}
+      />
+
       <Onboarding />
 
       {infoOpen && (
@@ -1387,7 +1402,14 @@ function PageInner() {
             if (activePulsar) handlePulsarCopy(activePulsar)
           }}
         >
-          <PulsarTooltip pulsar={activePulsar} locked={!!lockedPulsar} />
+          <PulsarTooltip
+            pulsar={activePulsar}
+            locked={!!lockedPulsar}
+            onInfo={(anchor) => {
+              setPulsarCardAnchor(anchor)
+              setPulsarCardOpen(true)
+            }}
+          />
         </div>
         <div className="flex items-center gap-3 shrink-0 pointer-events-auto">
           {plaqueData && (
