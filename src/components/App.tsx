@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode, useState, useEffect, useRef,
 import { Volume2, VolumeOff } from "lucide-react"
 import type { Pulsar, Star, RelativePulsar, PlaqueData } from "@/lib/types"
 import { computePlaqueData } from "@/lib/compute-plaque"
+import { computePDOP } from "@/lib/pulsar-selection"
 import {
   type AppState,
   type ObserverRef,
@@ -266,6 +267,30 @@ function PageInner() {
       appState.epoch,
     )
   }, [pulsars, origin, appState.mode, appState.count, appState.algorithm, appState.epoch])
+
+  // Aggregate stats for the selected pulsar set (shown as a subtle chip
+  // in the top-right legend).  PDOP is the geometric-dilution-of-precision
+  // metric — lower is better triangulation.
+  const plaqueStats = useMemo(() => {
+    if (!plaqueData || plaqueData.pulsars.length === 0) return null
+    const list = plaqueData.pulsars
+    const periods = list.map((rp) => rp.pulsar.p0).sort((a, b) => a - b)
+    const dists = list.map((rp) => rp.dist).sort((a, b) => a - b)
+    const median = periods[Math.floor(periods.length / 2)] ?? 0
+    const minDist = dists[0] ?? 0
+    const maxDist = dists[dists.length - 1] ?? 0
+    const DEG = Math.PI / 180
+    const unitVecs = list.map((rp) => {
+      const clb = Math.cos(rp.gb * DEG)
+      return {
+        x: Math.cos(rp.gl * DEG) * clb,
+        y: Math.sin(rp.gl * DEG) * clb,
+        z: Math.sin(rp.gb * DEG),
+      }
+    })
+    const pdop = computePDOP(unitVecs)
+    return { median, minDist, maxDist, pdop }
+  }, [plaqueData])
 
   // Apply persisted locked pulsar from URL once data is loaded
   useEffect(() => {
@@ -947,6 +972,38 @@ function PageInner() {
                 <span className="text-foreground/80">→</span> fixed line = direction to GC
               </div>
             </div>
+
+            {plaqueStats && (
+              <>
+                <div className="text-foreground/35 uppercase tracking-[0.1em] text-[8px] mt-2.5 mb-1">
+                  stats
+                </div>
+                <div className="text-foreground/55 space-y-0.5 tabular-nums">
+                  <div title="geometric dilution of precision — lower = tighter triangulation">
+                    PDOP{" "}
+                    <span className="text-foreground/85">
+                      {Number.isFinite(plaqueStats.pdop) ? plaqueStats.pdop.toFixed(2) : "∞"}
+                    </span>
+                  </div>
+                  <div title="median rotation period of the selected pulsars">
+                    P̃{" "}
+                    <span className="text-foreground/85">
+                      {plaqueStats.median < 0.001
+                        ? `${(plaqueStats.median * 1e6).toFixed(0)}µs`
+                        : plaqueStats.median < 1
+                          ? `${(plaqueStats.median * 1e3).toFixed(1)}ms`
+                          : `${plaqueStats.median.toFixed(2)}s`}
+                    </span>
+                  </div>
+                  <div title="distance span from observer to the nearest and farthest selected pulsars">
+                    d{" "}
+                    <span className="text-foreground/85">
+                      {plaqueStats.minDist.toFixed(2)}–{plaqueStats.maxDist.toFixed(2)} kpc
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="text-foreground/35 uppercase tracking-[0.1em] text-[8px] mt-2.5 mb-1">
               shortcuts

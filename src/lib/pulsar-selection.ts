@@ -38,7 +38,7 @@ function periodUniqueness(p0: number, selectedPeriods: number[]): number {
 // Lower PDOP = better geometric spread for triangulation
 // Formula: Q = (H^T H)^-1, PDOP = sqrt(trace(Q))
 // H is Nx3 matrix of unit direction vectors
-function computePDOP(unitVectors: Array<{ x: number; y: number; z: number }>): number {
+export function computePDOP(unitVectors: Array<{ x: number; y: number; z: number }>): number {
   const n = unitVectors.length
   if (n < 3) return Infinity
 
@@ -79,7 +79,7 @@ function computePDOP(unitVectors: Array<{ x: number; y: number; z: number }>): n
 }
 
 // Get 3D unit direction vector from observer to target (in galactic Cartesian)
-function unitDirection(
+export function unitDirection(
   observer: { gl: number; gb: number; dist: number },
   target: { gl: number; gb: number; dist: number },
 ): { x: number; y: number; z: number } {
