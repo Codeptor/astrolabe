@@ -694,6 +694,13 @@ function PageInner() {
             >
               about
             </button>
+            <a
+              href={`/compare?a=${encodeURIComponent(origin.name)}`}
+              className="text-[10px] text-foreground/70 hover:text-foreground transition cursor-pointer"
+              title="compare this observer against another"
+            >
+              compare
+            </a>
             <AlgorithmPicker
               value={appState.algorithm}
               onChange={(a) => setAppState((s) => ({ ...s, algorithm: a }))}
@@ -1093,6 +1100,21 @@ function PageInner() {
                   catalogued star are resolved via the CDS Sesame service. All
                   coordinates use the IAU J2000 galactic system.
                 </p>
+              </div>
+
+              <div className="pt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-foreground/50">
+                <a
+                  href="/about"
+                  className="underline hover:text-foreground transition"
+                >
+                  read the longer write-up
+                </a>
+                <a
+                  href={`/compare?a=${encodeURIComponent(origin.name)}`}
+                  className="underline hover:text-foreground transition"
+                >
+                  open compare mode
+                </a>
               </div>
 
               <div className="pt-2 text-[10px] text-foreground/50">
