@@ -1,0 +1,279 @@
+---
+import RootLayout from "../layouts/RootLayout.astro"
+---
+
+<RootLayout
+  title="Astrolabe — about the Pioneer plaque"
+  description="The history behind the 1972 Pioneer plaque pulsar map, Frank Drake's triangulation scheme, and why Astrolabe picks the pulsars it does."
+  path="/about"
+>
+  <div class="min-h-svh flex flex-col">
+    <header class="flex items-center justify-between gap-4 px-5 py-3 border-b border-foreground/10 shrink-0">
+      <a
+        href="/"
+        class="text-[12px] text-foreground hover:text-foreground/70 transition"
+        style="font-family: var(--font-display)"
+      >
+        ASTROLABE
+      </a>
+      <a
+        href="/"
+        class="text-[10px] text-foreground/50 hover:text-foreground transition"
+        aria-label="back to the map"
+      >
+        ← back to the map
+      </a>
+    </header>
+
+    <main
+      id="main"
+      class="max-w-2xl mx-auto w-full px-5 sm:px-8 py-10 sm:py-16 flex flex-col gap-10"
+    >
+      <section class="flex flex-col gap-3">
+        <p class="text-[9px] uppercase tracking-[0.22em] text-foreground/45">
+          1972 · pioneer 10 · a message from nowhere in particular
+        </p>
+        <h1
+          class="text-[32px] sm:text-[42px] leading-[1.05] text-foreground"
+          style="font-family: var(--font-display)"
+        >
+          how to write an address for the solar system
+        </h1>
+        <p class="text-[13px] leading-relaxed text-foreground/75 max-w-prose">
+          In March 1972, NASA launched Pioneer 10 on a trajectory that would
+          eventually carry it out of the solar system. Bolted to its antenna
+          support strut was a gold-anodised aluminium plaque engraved with a
+          pictogram intended to identify <em>where</em> and <em>when</em>
+          the spacecraft came from — without relying on any language, any
+          number system, or any culture that a reader would need to share
+          with us.
+        </p>
+        <p class="text-[13px] leading-relaxed text-foreground/75 max-w-prose">
+          The plaque was designed in three weeks by Frank Drake, Carl Sagan,
+          and Linda Salzman Sagan. The central question: what landmarks in the
+          galaxy are stable, detectable, and unambiguous enough that any
+          spacefaring reader — ours, or someone else's — could locate the
+          Sun by their relative positions?
+        </p>
+      </section>
+
+      <section class="flex flex-col gap-3">
+        <h2
+          class="text-[20px] text-foreground leading-tight"
+          style="font-family: var(--font-display)"
+        >
+          why pulsars
+        </h2>
+        <p class="text-[12px] leading-relaxed text-foreground/75 max-w-prose">
+          Pulsars are rotating neutron stars that sweep a beam of radio
+          emission past Earth at staggeringly precise intervals — periods
+          ranging from about one millisecond to a few seconds, and stable
+          enough that their slow spindown can be reasoned about millions of
+          years into the past.
+        </p>
+        <p class="text-[12px] leading-relaxed text-foreground/75 max-w-prose">
+          Every pulsar Drake picked has its own unique fingerprint: a period
+          that any observer can measure, and a distance that can be inferred.
+          Taken together, the relative angles and distances from the observer
+          to a handful of pulsars form a triangulation map that resolves to
+          essentially one point in the galaxy — the Sun — even after
+          thousands of years of proper motion.
+        </p>
+        <p class="text-[12px] leading-relaxed text-foreground/75 max-w-prose">
+          The binary tick marks at the end of each line encode the pulsar's
+          period in units of the hydrogen-21cm spin-flip transition — a
+          frequency defined by atomic physics, not by any cultural
+          convention. "We know what hydrogen does; here is how long this
+          pulsar's cycle lasts in those units." Read the binary, look up the
+          pulsars in your own catalogues, and you can place the author's
+          home system with high confidence.
+        </p>
+      </section>
+
+      <section class="flex flex-col gap-3">
+        <h2
+          class="text-[20px] text-foreground leading-tight"
+          style="font-family: var(--font-display)"
+        >
+          what astrolabe does
+        </h2>
+        <p class="text-[12px] leading-relaxed text-foreground/75 max-w-prose">
+          Astrolabe reproduces the plaque's triangulation map for any observer
+          in the galaxy — not just the Sun. Pick a star, a custom galactic
+          coordinate, or any object SIMBAD can resolve, and the app recomputes
+          the best fourteen pulsars from <em>that</em> vantage point using
+          several selection strategies.
+        </p>
+
+        <div class="flex flex-col gap-2 text-[11px] leading-relaxed text-foreground/70 max-w-prose">
+          <div>
+            <span class="text-foreground">gdop</span>
+            <span class="text-foreground/55">
+              — greedy geometric-dilution-of-precision. Pick pulsars that
+              together produce the smallest triangulation error. Default.
+              Matches what you would actually want if you were designing a
+              navigation system.
+            </span>
+          </div>
+          <div>
+            <span class="text-foreground">fastest</span>
+            <span class="text-foreground/55">
+              — shortest rotation periods. Millisecond pulsars are the most
+              precise clocks in the universe; a set of them gives the most
+              stable binary signatures.
+            </span>
+          </div>
+          <div>
+            <span class="text-foreground">closest</span>
+            <span class="text-foreground/55">
+              — nearest to the observer. Short lines mean the smallest
+              absolute position errors, at the cost of poor angular
+              coverage.
+            </span>
+          </div>
+          <div>
+            <span class="text-foreground">longest</span>
+            <span class="text-foreground/55">
+              — furthest from the observer. Long lines provide the best
+              angular leverage for coarse localisation.
+            </span>
+          </div>
+          <div>
+            <span class="text-foreground">stable</span>
+            <span class="text-foreground/55">
+              — lowest spindown rate. Pulsars whose periods change the
+              slowest stay usable as clocks across the longest time spans.
+            </span>
+          </div>
+          <div>
+            <span class="text-foreground">random</span>
+            <span class="text-foreground/55">
+              — a reshuffle from the full catalogue. Useful for sanity
+              checks and for seeing how much worse an unplanned
+              triangulation set can look.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="flex flex-col gap-3">
+        <h2
+          class="text-[20px] text-foreground leading-tight"
+          style="font-family: var(--font-display)"
+        >
+          reading a pulsar line
+        </h2>
+        <ul class="flex flex-col gap-1.5 text-[11px] leading-relaxed text-foreground/70 max-w-prose list-none pl-0">
+          <li>
+            <span class="text-foreground">line length</span>
+            <span class="text-foreground/55">
+              — projected distance to the pulsar from the observer, linear
+              in kiloparsecs.
+            </span>
+          </li>
+          <li>
+            <span class="text-foreground">line direction</span>
+            <span class="text-foreground/55">
+              — galactic longitude. The long horizontal line points toward
+              the galactic centre.
+            </span>
+          </li>
+          <li>
+            <span class="text-foreground">binary ticks</span>
+            <span class="text-foreground/55">
+              — the pulsar's spin period, most-significant bit first, in
+              hydrogen-21cm units. A <em>|</em> is a 1, a <em>−</em> is a 0.
+            </span>
+          </li>
+          <li>
+            <span class="text-foreground">time-machine slider</span>
+            <span class="text-foreground/55">
+              — applies synthetic proper motion and spindown up to ±10 Myr.
+              The pulsars drift, the periods evolve, the binary digits flip.
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="flex flex-col gap-3">
+        <h2
+          class="text-[20px] text-foreground leading-tight"
+          style="font-family: var(--font-display)"
+        >
+          data
+        </h2>
+        <p class="text-[12px] leading-relaxed text-foreground/75 max-w-prose">
+          Pulsar data comes from the
+          <a
+            href="https://www.atnf.csiro.au/research/pulsar/psrcat/"
+            class="underline decoration-foreground/30 hover:decoration-foreground text-foreground"
+            target="_blank"
+            rel="noreferrer"
+            >ATNF Pulsar Catalogue v2.7.0</a
+          >
+          — 3,924 pulsars, each with a spin period, spindown rate, and
+          distance estimate. The curated star list is a hand-picked set of
+          notable objects for the picker; any other star can be resolved on
+          demand through the
+          <a
+            href="https://simbad.u-strasbg.fr/simbad/"
+            class="underline decoration-foreground/30 hover:decoration-foreground text-foreground"
+            target="_blank"
+            rel="noreferrer"
+            >SIMBAD</a
+          >
+          fallback.
+        </p>
+      </section>
+
+      <section class="flex flex-col gap-3">
+        <h2
+          class="text-[20px] text-foreground leading-tight"
+          style="font-family: var(--font-display)"
+        >
+          further reading
+        </h2>
+        <ul
+          class="flex flex-col gap-1 text-[11px] leading-relaxed text-foreground/70 max-w-prose list-none pl-0"
+        >
+          <li>
+            <a
+              href="https://en.wikipedia.org/wiki/Pioneer_plaque"
+              class="underline decoration-foreground/30 hover:decoration-foreground text-foreground/90"
+              target="_blank"
+              rel="noreferrer"
+              >the pioneer plaque (wikipedia)</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://www.jpl.nasa.gov/missions/pioneer-10"
+              class="underline decoration-foreground/30 hover:decoration-foreground text-foreground/90"
+              target="_blank"
+              rel="noreferrer"
+              >pioneer 10 — nasa/jpl</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://en.wikipedia.org/wiki/Frank_Drake"
+              class="underline decoration-foreground/30 hover:decoration-foreground text-foreground/90"
+              target="_blank"
+              rel="noreferrer"
+              >frank drake (wikipedia)</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/codeptor/astrolabe"
+              class="underline decoration-foreground/30 hover:decoration-foreground text-foreground/90"
+              target="_blank"
+              rel="noreferrer"
+              >astrolabe — source on github</a
+            >
+          </li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</RootLayout>
