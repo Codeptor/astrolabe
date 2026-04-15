@@ -16,7 +16,7 @@ export type ObserverRef =
   | { kind: "custom"; data: CustomObserver }
 
 // All themes are first-class equals — dark, light, and color presets share
-// one picker. Managed by next-themes via the `themes` prop on ThemeProvider.
+// one picker. Applied via a class on <html>; see lib/theme.ts.
 export type Theme = "dark" | "light" | "gold" | "blueprint"
 
 export const ALL_THEMES: Theme[] = ["dark", "light", "gold", "blueprint"]
