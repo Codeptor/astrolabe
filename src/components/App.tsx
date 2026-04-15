@@ -131,6 +131,7 @@ function PageInner() {
   // leaving the pulsar stops it. Off by default (browser autoplay policies).
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [timePlaying, setTimePlaying] = useState(false)
+  const [zoom, setZoom] = useState(1)
   const [enriched, setEnriched] = useState<{ spType: string | null; otype: string | null } | null>(
     null,
   )
@@ -316,6 +317,7 @@ function PageInner() {
     setLockedPulsar(null)
     setHoveredPulsar(null)
     setTimePlaying(false)
+    setZoom(1)
   }, [setAppState])
 
   // Time-lapse tick: advances epoch by one slider step every 50ms,
@@ -916,7 +918,10 @@ function PageInner() {
         }`}
       >
         {plaqueData && (
-          <div className="w-full h-full pointer-events-auto">
+          <div
+            className="w-full h-full pointer-events-auto transition-transform duration-200 ease-out will-change-transform"
+            style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+          >
             <Plaque
               ref={svgRef}
               data={plaqueData}
@@ -928,6 +933,38 @@ function PageInner() {
           </div>
         )}
       </main>
+
+      {plaqueData && (
+        <div className="fixed bottom-4 right-4 z-[60] flex items-center gap-0 text-[10px] text-foreground/70 bg-background/60 backdrop-blur border border-foreground/15 leading-none select-none">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}
+            aria-label="zoom out"
+            title="zoom out"
+            className="px-2 py-1 hover:bg-foreground/10 hover:text-foreground cursor-pointer transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            aria-label="reset zoom"
+            title="reset zoom"
+            className="px-2 py-1 border-x border-foreground/15 tabular-nums min-w-[42px] text-center hover:bg-foreground/10 hover:text-foreground cursor-pointer transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
+          >
+            {zoom.toFixed(zoom === Math.round(zoom) ? 0 : 2)}×
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(3, Math.round((z + 0.25) * 100) / 100))}
+            aria-label="zoom in"
+            title="zoom in"
+            className="px-2 py-1 hover:bg-foreground/10 hover:text-foreground cursor-pointer transition focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
+          >
+            +
+          </button>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[70] bg-foreground/10 backdrop-blur px-3 py-1 text-[10px] text-foreground border border-foreground/20 pointer-events-none">
