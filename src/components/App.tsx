@@ -723,8 +723,8 @@ function PageInner() {
       }}
     >
       {/* Header */}
-      <header className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4 flex items-baseline justify-between z-50 gap-4">
-        <div className="flex flex-col gap-1">
+      <header className="shrink-0 px-4 pt-3 sm:px-6 sm:pt-4 flex items-baseline justify-between z-50 gap-4 pointer-events-none">
+        <div className="flex flex-col gap-1 pointer-events-auto">
           <span className="text-[11px] text-foreground leading-none">astrolabe</span>
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -785,7 +785,7 @@ function PageInner() {
         </div>
 
         {plaqueData && (
-          <div className="hidden md:flex items-center gap-3 text-[10px] text-foreground/70 leading-none">
+          <div className="hidden md:flex items-center gap-3 text-[10px] text-foreground/70 leading-none pointer-events-auto">
             <span>{plaqueData.pulsars.length} pulsars</span>
             {dot}
             <span className="flex items-center gap-1">
@@ -813,7 +813,7 @@ function PageInner() {
           </div>
         )}
 
-        <div className="flex flex-col items-end gap-3">
+        <div className="flex flex-col items-end gap-3 pointer-events-auto">
           {/* Action buttons */}
           <div className="flex items-center gap-4 leading-none text-[10px]">
             <button
