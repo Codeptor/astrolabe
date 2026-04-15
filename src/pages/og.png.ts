@@ -1,6 +1,10 @@
 import type { APIRoute } from "astro"
 import { ImageResponse } from "@vercel/og"
 import { createElement as h, type ReactNode } from "react"
+import { parseState } from "@/lib/state"
+import { selectPulsars } from "@/lib/pulsar-selection"
+import { GC_DIST_KPC } from "@/lib/constants"
+import type { Pulsar, RelativePulsar } from "@/lib/types"
 
 export const prerender = false
 
@@ -29,6 +33,7 @@ const GC_X = VB_W - PAD
 const GC_DIST_PX = Math.round((GC_X * 2) / 3)
 const EARTH_X = GC_X - GC_DIST_PX
 const EARTH_Y = VB_H / 2
+const PX_PER_KPC = GC_DIST_PX / GC_DIST_KPC
 
 function maxRadialLen(angleRad: number): number {
   const cx = Math.cos(angleRad)
@@ -41,9 +46,19 @@ function maxRadialLen(angleRad: number): number {
   return len
 }
 
-function computeEndpoint(dist: number, angleDeg: number) {
+function pioneerEndpoint(dist: number, angleDeg: number) {
   const angleRad = -angleDeg * DEG
   const distPx = Math.min(dist * GC_DIST_PX, maxRadialLen(angleRad))
+  return {
+    x2: EARTH_X + Math.cos(angleRad) * distPx,
+    y2: EARTH_Y - Math.sin(angleRad) * distPx,
+  }
+}
+
+function computedEndpoint(rp: RelativePulsar) {
+  const projKpc = rp.dist * Math.cos(rp.gb * DEG)
+  const angleRad = -rp.gl * DEG
+  const distPx = Math.min(projKpc * PX_PER_KPC, maxRadialLen(angleRad))
   return {
     x2: EARTH_X + Math.cos(angleRad) * distPx,
     y2: EARTH_Y - Math.sin(angleRad) * distPx,
@@ -192,8 +207,59 @@ function solarSystem(): ReactNode {
   )
 }
 
-export const GET: APIRoute = async () => {
-  const lines = PIONEER_PULSARS.map((p) => computeEndpoint(p.dist, p.angle))
+type StarEntry = { name: string; gl: number; gb: number; dist: number; aliases?: string[] }
+
+function resolveObserver(
+  state: ReturnType<typeof parseState>,
+  stars: StarEntry[],
+): { origin: { gl: number; gb: number; dist: number }; label: string } | null {
+  if (state.observer.kind === "custom") {
+    const c = state.observer.data
+    return {
+      origin: { gl: c.gl, gb: c.gb, dist: c.dist },
+      label: `l=${c.gl.toFixed(1)}° b=${c.gb.toFixed(1)}° d=${c.dist.toFixed(2)}kpc`,
+    }
+  }
+  const name = state.observer.name
+  const star = stars.find(
+    (s) => s.name === name || (s.aliases && s.aliases.includes(name)),
+  )
+  if (!star) return null
+  return {
+    origin: { gl: star.gl, gb: star.gb, dist: star.dist },
+    label: star.name,
+  }
+}
+
+export const GET: APIRoute = async ({ url, request }) => {
+  const state = parseState(url.searchParams)
+
+  let lines: Array<{ x2: number; y2: number }>
+  let footerLeft: string
+
+  if (state.mode === "1972") {
+    lines = PIONEER_PULSARS.map((p) => pioneerEndpoint(p.dist, p.angle))
+    footerLeft = "14 pulsars · pioneer 1972 reference"
+  } else {
+    try {
+      const origin = new URL(request.url).origin
+      const [pulsarsRes, starsRes] = await Promise.all([
+        fetch(`${origin}/data/pulsars.json`),
+        fetch(`${origin}/data/stars.json`),
+      ])
+      if (!pulsarsRes.ok || !starsRes.ok) throw new Error("data fetch failed")
+      const pulsars = (await pulsarsRes.json()) as Pulsar[]
+      const stars = (await starsRes.json()) as StarEntry[]
+      const resolved = resolveObserver(state, stars)
+      if (!resolved) throw new Error("observer not found")
+      const selected = selectPulsars(pulsars, resolved.origin, state.count, state.algorithm)
+      lines = selected.map(computedEndpoint)
+      footerLeft = `from ${resolved.label.toLowerCase()} · ${state.count} pulsars · ${state.algorithm}`
+    } catch {
+      lines = PIONEER_PULSARS.map((p) => pioneerEndpoint(p.dist, p.angle))
+      footerLeft = "pioneer 1972 reference"
+    }
+  }
 
   const tree = h(
     "div",
@@ -289,11 +355,17 @@ export const GET: APIRoute = async () => {
             textTransform: "uppercase",
           },
         },
-        h("div", { style: { display: "flex" } }, "14 pulsars · pioneer 1972 reference"),
+        h("div", { style: { display: "flex" } }, footerLeft),
         h("div", { style: { display: "flex" } }, "astrolabe.bhanueso.dev"),
       ),
     ),
   )
 
-  return new ImageResponse(tree, { width: 1200, height: 630 })
+  return new ImageResponse(tree, {
+    width: 1200,
+    height: 630,
+    headers: {
+      "cache-control": "public, max-age=0, s-maxage=604800, stale-while-revalidate=86400",
+    },
+  })
 }
