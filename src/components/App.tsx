@@ -446,6 +446,10 @@ function PageInner() {
       if (document.activeElement?.tagName === "TEXTAREA") return
 
       if (e.key === "Escape") {
+        if (infoCardOpen) {
+          setInfoCardOpen(false)
+          return
+        }
         if (infoOpen) {
           setInfoOpen(false)
           return
@@ -580,6 +584,7 @@ function PageInner() {
     coordOpen,
     embedOpen,
     viewsOpen,
+    infoCardOpen,
     sidebarOpen,
     lockedPulsar,
     handleRandomStar,
