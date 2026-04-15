@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useRef, useState } from "react"
 import type { AppState } from "@/lib/state"
 import { shareableUrl } from "@/lib/state"
