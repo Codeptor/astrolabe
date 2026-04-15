@@ -47,20 +47,17 @@ const GC_DIST_UNITS = 209.89
 const STROKE_WIDTH = 0.8
 
 // Bit-tick geometry (measured from the Wikimedia paths)
-const BIT_LONG = 3.0   // "1" bit — height of the perpendicular stroke
-const BIT_SHORT = 0.8  // "0" bit — shorter stroke
-const BIT_STEP = 1.6   // horizontal (along-line) spacing between bits
-const BIT_START_GAP = 1.2 // gap between line endpoint and first bit
+// Engraved encoding: 1-bit = short perpendicular tick ("|"), 0-bit = short
+// inline dash along the line's outward continuation ("-").  Both occupy
+// the same along-line slot so the binary reads like a row of characters.
+const BIT_LONG = 1.8        // "1" perpendicular tick — full height
+const BIT_INLINE_LEN = 0.9  // "0" inline dash — length along line
+const BIT_STEP = 1.1        // along-line spacing between bit centres
+const BIT_START_GAP = 0.8   // gap between line endpoint and first bit centre
 
 const GC_CAP_LEN = 2.0 // vertical cap tick at the GC end
 const OBSERVER_R = 1.3 // filled dot radius at observer
 
-// Z-tick geometry — perpendicular to the line at the endpoint, length
-// scales with |z| as a fraction of GC distance (same unit system as
-// the main line lengths).  Capped so very out-of-plane pulsars don't
-// produce gigantic ticks.
-const Z_TICK_MAX = 24 // units
-const Z_TICK_SCALE = GC_DIST_UNITS // same scale as line lengths
 
 interface PlaqueFaithfulProps {
   data: PlaqueData
@@ -68,8 +65,6 @@ interface PlaqueFaithfulProps {
   lockedPulsar?: RelativePulsar | null
   onHover?: (rp: RelativePulsar | null) => void
   onClick?: (rp: RelativePulsar | null) => void
-  /** When true, draw z-axis tick at each endpoint (default true) */
-  showZTicks?: boolean
   /** When true, draw binary period ticks (default true) */
   showBinary?: boolean
 }
@@ -80,32 +75,29 @@ interface LineGeom {
   angle: number
   /** Line length in plate units */
   lineLen: number
-  /** Z-projection tick length in plate units, signed by sin(gb) */
-  zTick: number
   /** Bits of the period, MSB first */
   bits: number[]
 }
 
 const Plaque1972Faithful = forwardRef<SVGSVGElement, PlaqueFaithfulProps>(
   function Plaque1972Faithful(
-    { data, activePulsar, lockedPulsar, onHover, onClick, showZTicks = true, showBinary = true },
+    { data, activePulsar, lockedPulsar, onHover, onClick, showBinary = true },
     ref,
   ) {
     const { pulsars, gcAngle } = data
 
     const geoms = useMemo<LineGeom[]>(() => {
       return pulsars.map((rp) => {
-        const gbRad = rp.gb * DEG
-        const projDist = rp.dist * Math.cos(gbRad) // kpc
-        const zKpc = rp.dist * Math.sin(gbRad)
-        // Scale to plate units: treat kpc exactly as "ratio-of-GC" × GC_DIST_UNITS
+        // Drake used projected (galactic-plane) distance for line length;
+        // the out-of-plane z-component is simply discarded — the engraving
+        // has no marker for it.  Pulsars were picked close-to-plane in 1972
+        // so the loss was tolerable.
+        const projDist = rp.dist * Math.cos(rp.gb * DEG) // kpc
         const projRatio = projDist / GC_DIST_KPC
         const lineLen = projRatio * GC_DIST_UNITS
-        const zRaw = (zKpc / GC_DIST_KPC) * Z_TICK_SCALE
-        const zTick = Math.max(-Z_TICK_MAX, Math.min(Z_TICK_MAX, zRaw))
         const angle = rp.angle - gcAngle // make GC direction = 0 like the plaque
         const bits = periodToTicks(rp.pulsar.p0)
-        return { rp, angle, lineLen, zTick, bits }
+        return { rp, angle, lineLen, bits }
       })
     }, [pulsars, gcAngle])
 
@@ -198,32 +190,36 @@ const Plaque1972Faithful = forwardRef<SVGSVGElement, PlaqueFaithfulProps>(
                 fill="none"
               />
 
-              {/* z-axis tick at endpoint — perpendicular, signed by z */}
-              {showZTicks && g.zTick !== 0 && (
-                <line
-                  x1={g.lineLen}
-                  y1={0}
-                  x2={g.lineLen}
-                  y2={-g.zTick}
-                  stroke="currentColor"
-                  strokeWidth={STROKE_WIDTH}
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              )}
-
-              {/* Binary period ticks — MSB nearest endpoint, LSB outward */}
+              {/* Binary period ticks — MSB nearest endpoint, LSB outward.
+                  1-bit ("|"): short perpendicular tick centred on line.
+                  0-bit ("-"): short inline dash along the line direction.
+                  Both occupy one BIT_STEP slot so the binary reads like
+                  engraved characters. */}
               {showBinary &&
                 g.bits.map((bit, i) => {
                   const x = g.lineLen + BIT_START_GAP + i * BIT_STEP
-                  const h = bit === 1 ? BIT_LONG : BIT_SHORT
+                  if (bit === 1) {
+                    return (
+                      <line
+                        key={i}
+                        x1={x}
+                        y1={-BIT_LONG / 2}
+                        x2={x}
+                        y2={BIT_LONG / 2}
+                        stroke="currentColor"
+                        strokeWidth={STROKE_WIDTH}
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    )
+                  }
                   return (
                     <line
                       key={i}
-                      x1={x}
+                      x1={x - BIT_INLINE_LEN / 2}
                       y1={0}
-                      x2={x}
-                      y2={h}
+                      x2={x + BIT_INLINE_LEN / 2}
+                      y2={0}
                       stroke="currentColor"
                       strokeWidth={STROKE_WIDTH}
                       strokeLinecap="round"

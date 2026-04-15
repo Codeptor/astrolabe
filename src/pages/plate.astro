@@ -1,0 +1,91 @@
+---
+import RootLayout from "../layouts/RootLayout.astro"
+import paths from "../data/wikimedia-pulsars-paths.svg?raw"
+
+const pathCount = paths.split("<path").length - 1
+---
+
+<RootLayout
+  title="Astrolabe — the plate · verbatim Wikimedia trace"
+  description="1:1 render of the Pulsars group from the public-domain Wikimedia Commons Voyager Golden Record SVG — hand-traced from the NASA original."
+  path="/plate"
+>
+  <div class="min-h-svh flex flex-col">
+    <header
+      class="flex items-center justify-between gap-4 px-6 py-3 border-b border-foreground/10 shrink-0"
+    >
+      <a
+        href="/"
+        class="text-[12px] text-foreground hover:text-foreground/70 transition"
+        style="font-family: var(--font-display)"
+      >
+        ASTROLABE
+      </a>
+      <div
+        class="text-[9px] uppercase tracking-[0.2em] text-foreground/40 leading-tight text-center"
+      >
+        the plate
+        <div class="text-foreground/25 normal-case tracking-normal text-[9px] mt-0.5">
+          verbatim trace · 1972 NASA original
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-[10px]">
+        <a
+          href="/engraver"
+          class="text-foreground/70 hover:text-foreground transition"
+          title="engrave a plaque for any observer using these rules"
+        >
+          engraver →
+        </a>
+        <a
+          href="/"
+          class="text-foreground/50 hover:text-foreground transition"
+        >
+          home
+        </a>
+      </div>
+    </header>
+
+    <main
+      id="main"
+      class="flex-1 min-h-0 flex items-center justify-center p-8 sm:p-12"
+    >
+      <svg
+        viewBox="190 330 310 200"
+        class="w-full max-w-[min(1400px,100%)] max-h-[80vh]"
+        preserveAspectRatio="xMidYMid meet"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-label="Pioneer / Voyager pulsar map, traced 1:1 from the Wikimedia Commons SVG"
+      >
+        <g
+          stroke="currentColor"
+          stroke-width="0.8"
+          stroke-linecap="round"
+          fill="none"
+        >
+          <Fragment set:html={paths} />
+        </g>
+      </svg>
+    </main>
+
+    <footer
+      class="shrink-0 px-6 py-3 border-t border-foreground/10 text-[9px] text-foreground/45 leading-relaxed flex flex-wrap items-center justify-between gap-3"
+    >
+      <span>
+        <span class="text-foreground/35 uppercase tracking-widest mr-2">source</span>
+        <a
+          href="https://commons.wikimedia.org/wiki/File:Voyager_Golden_Record_Cover_Explanation.svg"
+          target="_blank"
+          rel="noreferrer"
+          class="underline decoration-foreground/25 hover:decoration-foreground hover:text-foreground transition"
+        >
+          Voyager_Golden_Record_Cover_Explanation.svg
+        </a>
+        · traced by BrianKrent from the NASA/JPL public-domain original, 2010 (rev. 2015)
+      </span>
+      <span class="tabular-nums shrink-0">
+        {pathCount} paths rendered verbatim
+      </span>
+    </footer>
+  </div>
+</RootLayout>

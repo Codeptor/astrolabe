@@ -1,0 +1,49 @@
+---
+import RootLayout from "../layouts/RootLayout.astro"
+import LiveFaithful from "../components/_test-live-faithful"
+---
+
+<RootLayout
+  title="Astrolabe — the engraver · custom plaque renderer"
+  description="Draws a Pioneer-plaque-style pulsar map for any observer, using rules reverse-engineered from the Wikimedia trace and driven by live ATNF data."
+  path="/engraver"
+>
+  <div class="min-h-svh flex flex-col">
+    <header
+      class="flex items-center justify-between gap-4 px-6 py-3 border-b border-foreground/10 shrink-0"
+    >
+      <a
+        href="/"
+        class="text-[12px] text-foreground hover:text-foreground/70 transition"
+        style="font-family: var(--font-display)"
+      >
+        ASTROLABE
+      </a>
+      <div
+        class="text-[9px] uppercase tracking-[0.2em] text-foreground/40 leading-tight text-center"
+      >
+        the engraver
+        <div class="text-foreground/25 normal-case tracking-normal text-[9px] mt-0.5">
+          engraves a plaque for any observer
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-[10px]">
+        <a
+          href="/plate"
+          class="text-foreground/70 hover:text-foreground transition"
+          title="the verbatim 1972 engraving"
+        >
+          ← the plate
+        </a>
+        <a
+          href="/"
+          class="text-foreground/50 hover:text-foreground transition"
+        >
+          home
+        </a>
+      </div>
+    </header>
+
+    <LiveFaithful client:only="react" />
+  </div>
+</RootLayout>
