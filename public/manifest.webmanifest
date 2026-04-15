@@ -1,0 +1,26 @@
+{
+  "name": "Astrolabe",
+  "short_name": "Astrolabe",
+  "description": "Interactive Pioneer-plaque-style pulsar map generator. Pick any star in the galaxy and get a triangulation map.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a10",
+  "theme_color": "#0a0a10",
+  "categories": ["education", "science", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
