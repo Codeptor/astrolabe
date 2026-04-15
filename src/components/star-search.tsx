@@ -13,6 +13,7 @@ interface StarSearchProps {
 }
 
 const RECENT_KEY = "astrolabe.recent_stars"
+const FAVORITE_KEY = "astrolabe.favorite_stars"
 const MAX_RECENT = 6
 
 // Lightweight fuzzy match scoring
@@ -76,16 +77,89 @@ function saveRecent(name: string) {
   } catch {}
 }
 
+function loadFavorites(): string[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(FAVORITE_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string") : []
+  } catch {
+    return []
+  }
+}
+
+function toggleFavorite(name: string): string[] {
+  if (typeof window === "undefined") return []
+  try {
+    const current = loadFavorites()
+    const next = current.includes(name)
+      ? current.filter((n) => n !== name)
+      : [...current, name]
+    localStorage.setItem(FAVORITE_KEY, JSON.stringify(next))
+    return next
+  } catch {
+    return []
+  }
+}
+
+function StarRow({
+  star,
+  isFav,
+  onSelect,
+  onToggleFav,
+}: {
+  star: Star
+  isFav: boolean
+  onSelect: () => void
+  onToggleFav: () => void
+}) {
+  return (
+    <div className="flex items-stretch hover:bg-foreground/5 group">
+      <button
+        type="button"
+        className="flex-1 text-left px-2 py-1 text-[10px] cursor-pointer flex justify-between gap-2 min-w-0"
+        onClick={onSelect}
+      >
+        <span className="text-foreground truncate">{star.name}</span>
+        <span className="text-foreground/50 shrink-0">{star.dist.toFixed(2)} kpc</span>
+      </button>
+      <button
+        type="button"
+        aria-label={isFav ? `remove ${star.name} from favorites` : `add ${star.name} to favorites`}
+        aria-pressed={isFav}
+        className={`px-2 text-[11px] cursor-pointer transition opacity-40 hover:opacity-100 ${isFav ? "text-accent opacity-100" : "text-foreground/60"}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleFav()
+        }}
+      >
+        {isFav ? "★" : "☆"}
+      </button>
+    </div>
+  )
+}
+
 export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearchProps) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const [recent, setRecent] = useState<string[]>([])
+  const [favorites, setFavorites] = useState<string[]>([])
   const [apiResult, setApiResult] = useState<CustomStar | null>(null)
   const [apiLoading, setApiLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { setRecent(loadRecent()) }, [])
+  useEffect(() => {
+    setRecent(loadRecent())
+    setFavorites(loadFavorites())
+  }, [])
+
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites])
+
+  const handleToggleFavorite = useCallback((name: string) => {
+    setFavorites(toggleFavorite(name))
+  }, [])
 
   // Expose focus via global keyboard listener
   useEffect(() => {
@@ -152,14 +226,19 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
     }
   }, [query, parsed, results, resolveRemoteStar, structuredInput])
 
-  const recentStars = useMemo(() => {
-    const map = new Map(stars.map((s) => [s.name, s]))
-    return recent.map((n) => map.get(n)).filter((s): s is Star => !!s)
-  }, [recent, stars])
+  const starMap = useMemo(() => new Map(stars.map((s) => [s.name, s])), [stars])
+  const recentStars = useMemo(
+    () => recent.map((n) => starMap.get(n)).filter((s): s is Star => !!s),
+    [recent, starMap],
+  )
+  const favoriteStars = useMemo(
+    () => favorites.map((n) => starMap.get(n)).filter((s): s is Star => !!s),
+    [favorites, starMap],
+  )
 
   const showDropdown =
     open &&
-    (query.trim().length > 0 || recentStars.length > 0)
+    (query.trim().length > 0 || recentStars.length > 0 || favoriteStars.length > 0)
 
   const handleSelect = useCallback(
     (star: Star | CustomStar) => {
@@ -239,33 +318,44 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
             </button>
           )}
 
+          {!query.trim() && favoriteStars.length > 0 && (
+            <>
+              <div className="px-2 py-1 text-[9px] text-foreground/40 uppercase tracking-wider">favorites</div>
+              {favoriteStars.map((star) => (
+                <StarRow
+                  key={`fav-${star.name}`}
+                  star={star}
+                  isFav
+                  onSelect={() => handleSelect(star)}
+                  onToggleFav={() => handleToggleFavorite(star.name)}
+                />
+              ))}
+            </>
+          )}
+
           {!query.trim() && recentStars.length > 0 && (
             <>
               <div className="px-2 py-1 text-[9px] text-foreground/40 uppercase tracking-wider">recent</div>
               {recentStars.map((star) => (
-                <button
+                <StarRow
                   key={`recent-${star.name}`}
-                  type="button"
-                  className="w-full text-left px-2 py-1 text-[10px] hover:bg-foreground/5 cursor-pointer flex justify-between gap-2"
-                  onClick={() => handleSelect(star)}
-                >
-                  <span className="text-foreground truncate">{star.name}</span>
-                  <span className="text-foreground/50 shrink-0">{star.dist.toFixed(2)} kpc</span>
-                </button>
+                  star={star}
+                  isFav={favoriteSet.has(star.name)}
+                  onSelect={() => handleSelect(star)}
+                  onToggleFav={() => handleToggleFavorite(star.name)}
+                />
               ))}
             </>
           )}
 
           {results.map(({ star }) => (
-            <button
+            <StarRow
               key={star.name}
-              type="button"
-              className="w-full text-left px-2 py-1 text-[10px] hover:bg-foreground/5 cursor-pointer flex justify-between gap-2"
-              onClick={() => handleSelect(star)}
-            >
-              <span className="text-foreground truncate">{star.name}</span>
-              <span className="text-foreground/50 shrink-0">{star.dist.toFixed(2)} kpc</span>
-            </button>
+              star={star}
+              isFav={favoriteSet.has(star.name)}
+              onSelect={() => handleSelect(star)}
+              onToggleFav={() => handleToggleFavorite(star.name)}
+            />
           ))}
 
           {apiLoading && !parsed && (
