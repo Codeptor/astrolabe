@@ -28,6 +28,8 @@ import { EmbedModal } from "@/components/embed-modal"
 import { SavedViews } from "@/components/saved-views"
 import { StarInfoCard, type StarInfo } from "@/components/star-info-card"
 import { PulsarInfoCard } from "@/components/pulsar-info-card"
+import { TourOverlay } from "@/components/tour-overlay"
+import { TOUR } from "@/lib/tour"
 import { Onboarding } from "@/components/onboarding"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
@@ -143,6 +145,7 @@ function PageInner() {
   const [infoCardAnchor, setInfoCardAnchor] = useState<{ top: number; left: number } | null>(null)
   const [pulsarCardOpen, setPulsarCardOpen] = useState(false)
   const [pulsarCardAnchor, setPulsarCardAnchor] = useState<{ top: number; left: number } | null>(null)
+  const [tourIndex, setTourIndex] = useState<number | null>(null)
   const enrichedCache = useRef(new Map<string, StarInfo>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -337,6 +340,38 @@ function PageInner() {
     },
     [stars, setAppState],
   )
+
+  const applyTourStop = useCallback(
+    (i: number) => {
+      const stop = TOUR[i]
+      if (!stop) return
+      const match = stars.find((s) => s.name === stop.observer)
+      if (match) handleStarSelect(match)
+      setTourIndex(i)
+      // close transient UI that would sit on top of the tour card
+      setInfoCardOpen(false)
+      setPulsarCardOpen(false)
+      setInfoOpen(false)
+      setViewsOpen(false)
+      setEmbedOpen(false)
+      setCoordOpen(false)
+    },
+    [stars, handleStarSelect],
+  )
+  const startTour = useCallback(() => applyTourStop(0), [applyTourStop])
+  const exitTour = useCallback(() => setTourIndex(null), [])
+  const tourNext = useCallback(() => {
+    if (tourIndex === null) return
+    if (tourIndex >= TOUR.length - 1) {
+      exitTour()
+      return
+    }
+    applyTourStop(tourIndex + 1)
+  }, [tourIndex, applyTourStop, exitTour])
+  const tourPrev = useCallback(() => {
+    if (tourIndex === null || tourIndex <= 0) return
+    applyTourStop(tourIndex - 1)
+  }, [tourIndex, applyTourStop])
 
   const handleCustomCoords = useCallback(
     (obs: CustomObserver) => {
@@ -861,6 +896,17 @@ function PageInner() {
             >
               compare
             </a>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                startTour()
+              }}
+              className="text-[10px] text-foreground/70 hover:text-foreground transition cursor-pointer"
+              title="guided tour through notable observers"
+            >
+              tour
+            </button>
             <AlgorithmPicker
               value={appState.algorithm}
               onChange={(a) => setAppState((s) => ({ ...s, algorithm: a }))}
@@ -1171,6 +1217,13 @@ function PageInner() {
         anchor={pulsarCardAnchor}
         pulsar={lockedPulsar}
         onClose={() => setPulsarCardOpen(false)}
+      />
+
+      <TourOverlay
+        index={tourIndex}
+        onPrev={tourPrev}
+        onNext={tourNext}
+        onExit={exitTour}
       />
 
       <Onboarding />
