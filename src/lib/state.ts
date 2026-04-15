@@ -17,9 +17,9 @@ export type ObserverRef =
 
 // All themes are first-class equals — dark, light, and color presets share
 // one picker. Applied via a class on <html>; see lib/theme.ts.
-export type Theme = "dark" | "light" | "gold" | "blueprint"
+export type Theme = "dark" | "light" | "gold" | "blueprint" | "plaque"
 
-export const ALL_THEMES: Theme[] = ["dark", "light", "gold", "blueprint"]
+export const ALL_THEMES: Theme[] = ["dark", "light", "gold", "blueprint", "plaque"]
 
 export type Algorithm = "gdop" | "fastest" | "closest" | "longest" | "stable" | "random"
 
