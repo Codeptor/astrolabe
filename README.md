@@ -31,14 +31,14 @@ pnpm install
 pnpm dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:4321>.
 
 ## Scripts
 
 ```bash
-pnpm dev               # start Next.js dev server with Turbopack
-pnpm build             # production build
-pnpm start             # serve production build
+pnpm dev               # start Astro dev server (Vite)
+pnpm build             # production build (static + serverless functions)
+pnpm preview           # serve the production build locally
 pnpm test              # run vitest
 pnpm test:watch        # watch mode
 pnpm update-catalogue  # download and reprocess the ATNF pulsar catalogue
@@ -76,27 +76,34 @@ pnpm update-catalogue  # download and reprocess the ATNF pulsar catalogue
 
 ## Stack
 
-- Next.js 16 App Router
-- React 19
-- Tailwind CSS v4
-- `next-themes`
+- Astro v6 (static output + Vercel adapter)
+- React 19 as a `client:load` island via `@astrojs/react`
+- Tailwind CSS v4 via `@tailwindcss/vite`
+- `@vercel/og` for OG image rendering
 - Vitest
 - pnpm
 
-All plaque computation happens client-side. The only server path is the
-`/api/star-resolve` route used for SIMBAD-backed star lookup.
+All plaque computation happens client-side. The only server paths are
+`/api/star-resolve` (SIMBAD-backed lookup) and `/og.png` (runtime OG image),
+both deployed as Vercel serverless functions.
 
 ## Architecture
 
 ### Main Files
 
-- `app/page.tsx`: application shell, URL state sync, controls, and data loading
-- `components/plaque.tsx`: SVG plaque renderer
-- `lib/coordinates.ts`: galactic and Cartesian coordinate transforms
-- `lib/pulsar-selection.ts`: pulsar selection strategies, including GDOP
-- `lib/binary-encoding.ts`: pulsar period to binary tick encoding
-- `lib/proper-motion.ts`: synthetic time-machine drift and spin evolution
-- `lib/pioneer-original.ts`: fixed 1972 plaque reconstruction
+- `src/pages/index.astro`: static shell mounting `<App client:load>`
+- `src/layouts/RootLayout.astro`: `<head>` metadata, fonts, inline theme script
+- `src/components/App.tsx`: application root — URL state, controls, data loading
+- `src/components/plaque.tsx`: SVG plaque renderer
+- `src/components/ThemeScript.astro`: no-flash theme loader
+- `src/lib/coordinates.ts`: galactic and Cartesian coordinate transforms
+- `src/lib/pulsar-selection.ts`: pulsar selection strategies, including GDOP
+- `src/lib/binary-encoding.ts`: pulsar period to binary tick encoding
+- `src/lib/proper-motion.ts`: synthetic time-machine drift and spin evolution
+- `src/lib/pioneer-original.ts`: fixed 1972 plaque reconstruction
+- `src/lib/theme.ts`: vanilla theme hook
+- `src/pages/api/star-resolve.ts`: SIMBAD-backed star lookup (serverless)
+- `src/pages/og.png.ts`: runtime OG image via `@vercel/og`
 - `scripts/process-catalogue.ts`: ATNF tarball to `public/data/pulsars.json`
 
 ### Data
