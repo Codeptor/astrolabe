@@ -607,10 +607,24 @@ function PageInner() {
         </div>
 
         {plaqueData && (
-          <div className="hidden md:flex gap-3 text-[10px] text-foreground/70 leading-none">
+          <div className="hidden md:flex items-center gap-3 text-[10px] text-foreground/70 leading-none">
             <span>{plaqueData.pulsars.length} pulsars</span>
             {dot}
-            <span>from {origin.name}</span>
+            <span className="flex items-center gap-1">
+              from {origin.name}
+              {appState.observer.kind === "star" && origin.name !== "Sol" && (
+                <a
+                  href={`https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${encodeURIComponent(origin.name)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`open ${origin.name} on SIMBAD`}
+                  aria-label={`open ${origin.name} on SIMBAD`}
+                  className="text-foreground/40 hover:text-foreground transition text-[11px] leading-none"
+                >
+                  ↗
+                </a>
+              )}
+            </span>
             {dot}
             <span>{distToGC.toFixed(1)} kpc</span>
           </div>
