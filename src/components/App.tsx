@@ -931,7 +931,7 @@ function PageInner() {
 
       {infoOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-background/85 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 sm:p-8 overflow-y-auto"
+          className="fixed inset-0 z-[100] bg-background/85 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 sm:p-8 overflow-y-auto themed-scroll"
           onClick={() => setInfoOpen(false)}
         >
           <div

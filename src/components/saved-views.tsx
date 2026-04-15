@@ -175,7 +175,7 @@ export function SavedViews({ open, onClose, state, onApply, onToast }: SavedView
           </button>
         </div>
 
-        <div className="max-h-72 overflow-y-auto -mx-1">
+        <div className="max-h-72 overflow-y-auto -mx-1 themed-scroll">
           {views.length === 0 ? (
             <p className="px-1 py-6 text-[10px] text-foreground/50 italic text-center">
               no saved views yet · save the current map to name and recall it later.

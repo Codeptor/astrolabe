@@ -307,7 +307,7 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
       />
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 bg-background border border-foreground/10 max-h-64 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full z-50 bg-background border border-foreground/10 max-h-64 overflow-y-auto themed-scroll">
           {parsed && (
             <button
               type="button"

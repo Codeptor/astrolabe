@@ -3,6 +3,7 @@ import type { Pulsar, Star, RelativePulsar } from "@/lib/types"
 import { computePlaqueData, type Origin } from "@/lib/compute-plaque"
 import { useTheme } from "@/lib/theme"
 import Plaque from "@/components/plaque"
+import { AlgorithmPicker } from "@/components/algorithm-picker"
 import { ALL_ALGORITHMS, type Algorithm } from "@/lib/state"
 
 const SOL: Star = { name: "Sol", gl: 0, gb: 0, dist: 0, aliases: ["Sun", "Earth"] }
@@ -67,7 +68,7 @@ function PlaqueSide({
           value={observerName}
           onChange={(e) => onChange(e.target.value)}
           aria-label={`${label} observer`}
-          className="flex-1 min-w-0 text-[11px] bg-transparent text-foreground border-b border-foreground/30 px-1 py-0.5 outline-none focus:border-foreground cursor-pointer"
+          className="flex-1 min-w-0 text-[11px] bg-transparent text-foreground border-b border-foreground/30 px-1 py-0.5 outline-none focus:border-foreground cursor-pointer themed-scroll"
         >
           {options.map((s) => (
             <option key={s.name} value={s.name} className="bg-background text-foreground">
@@ -75,6 +76,18 @@ function PlaqueSide({
             </option>
           ))}
         </select>
+        {observerName !== "Sol" && (
+          <a
+            href={`https://simbad.cds.unistra.fr/simbad/sim-id?Ident=${encodeURIComponent(observerName)}`}
+            target="_blank"
+            rel="noreferrer"
+            title={`open ${observerName} on SIMBAD`}
+            aria-label={`open ${observerName} on SIMBAD`}
+            className="text-foreground/40 hover:text-foreground transition text-[11px] leading-none shrink-0"
+          >
+            ↗
+          </a>
+        )}
       </div>
       <div className="flex-1 min-h-0 relative">
         {data ? (
@@ -165,48 +178,39 @@ export function ComparePage() {
             compare
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[10px] text-foreground/70">
-          <label className="flex items-center gap-1.5">
-            <span className="text-foreground/50">algo</span>
-            <select
-              value={algorithm}
-              onChange={(e) => setAlgorithm(e.target.value as Algorithm)}
-              className="bg-transparent border-b border-foreground/30 px-1 py-0.5 outline-none focus:border-foreground cursor-pointer text-[10px]"
+        <div className="flex items-center gap-4 text-[10px] text-foreground/70">
+          <AlgorithmPicker value={algorithm} onChange={setAlgorithm} />
+          <div className="flex items-center gap-1 leading-none">
+            <button
+              type="button"
+              onClick={() => setCount((c) => Math.max(5, c - 1))}
+              aria-label="decrease pulsar count"
+              className="text-foreground/50 hover:text-foreground cursor-pointer w-3 text-center"
             >
-              {ALL_ALGORITHMS.map((a) => (
-                <option key={a} value={a} className="bg-background text-foreground">
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            <span className="text-foreground/50">n</span>
-            <input
-              type="number"
-              min={5}
-              max={50}
-              value={count}
-              onChange={(e) => {
-                const v = Number.parseInt(e.target.value, 10)
-                if (!Number.isFinite(v)) return
-                setCount(Math.min(50, Math.max(5, v)))
-              }}
-              className="w-12 bg-transparent border-b border-foreground/30 px-1 py-0.5 outline-none focus:border-foreground text-[10px] tabular-nums"
-              aria-label="pulsar count"
-            />
-          </label>
+              −
+            </button>
+            <span className="tabular-nums text-foreground/90 w-5 text-center">{count}</span>
+            <button
+              type="button"
+              onClick={() => setCount((c) => Math.min(50, c + 1))}
+              aria-label="increase pulsar count"
+              className="text-foreground/50 hover:text-foreground cursor-pointer w-3 text-center"
+            >
+              +
+            </button>
+          </div>
           <button
             type="button"
             onClick={swap}
-            className="text-[10px] text-foreground/70 hover:text-foreground border border-foreground/20 hover:border-foreground/50 px-2 py-0.5 cursor-pointer transition"
+            className="text-foreground/70 hover:text-foreground cursor-pointer transition leading-none"
             title="swap sides"
+            aria-label="swap observers"
           >
             ⇄ swap
           </button>
           <a
             href={`/?from=${encodeURIComponent(observerA)}`}
-            className="text-[10px] text-foreground/50 hover:text-foreground transition"
+            className="text-foreground/50 hover:text-foreground transition leading-none"
             title="exit compare mode to the standard view"
           >
             ← back
