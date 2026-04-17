@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import type { RelativePulsar } from "@/lib/types"
 
 interface PulsarListProps {
@@ -36,7 +36,10 @@ export function PulsarList({
   }, [activePulsar, open])
 
   // Sort by angle (CCW from East) for consistent order around the map
-  const sorted = [...pulsars].sort((a, b) => a.angle - b.angle)
+  const sorted = useMemo(
+    () => [...pulsars].sort((a, b) => a.angle - b.angle),
+    [pulsars],
+  )
 
   return (
     <aside

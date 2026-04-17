@@ -58,8 +58,22 @@ export function relativePosition(
   target: { gl: number; gb: number; dist: number },
 ): { gl: number; gb: number; dist: number } {
   const o = galacticToCartesian(observer.gl, observer.gb, observer.dist)
+  return relativePositionFromCart(o, target)
+}
+
+// Same as relativePosition, but the observer's cartesian coordinates are
+// computed once by the caller and reused — avoids N galacticToCartesian
+// calls when projecting a whole catalogue from a fixed observer.
+export function relativePositionFromCart(
+  observerCart: Vec3,
+  target: { gl: number; gb: number; dist: number },
+): { gl: number; gb: number; dist: number } {
   const t = galacticToCartesian(target.gl, target.gb, target.dist)
-  const rel: Vec3 = { x: t.x - o.x, y: t.y - o.y, z: t.z - o.z }
+  const rel: Vec3 = {
+    x: t.x - observerCart.x,
+    y: t.y - observerCart.y,
+    z: t.z - observerCart.z,
+  }
   return cartesianToGalactic(rel)
 }
 

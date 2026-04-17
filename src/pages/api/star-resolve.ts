@@ -8,6 +8,9 @@ export const GET: APIRoute = async ({ url }) => {
   if (!name) {
     return Response.json({ error: "missing name parameter" }, { status: 400 })
   }
+  if (name.length > 80) {
+    return Response.json({ error: "name too long" }, { status: 400 })
+  }
 
   const result = await resolveStar(name)
   if (!result) {

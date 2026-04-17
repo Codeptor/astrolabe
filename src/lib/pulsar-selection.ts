@@ -1,5 +1,5 @@
-import type { Pulsar, RelativePulsar } from "./types"
-import { relativePosition, galacticToCartesian } from "./coordinates"
+import type { Pulsar, RelativePulsar, Vec3 } from "./types"
+import { relativePositionFromCart, galacticToCartesian } from "./coordinates"
 
 const DEG = Math.PI / 180
 
@@ -84,10 +84,14 @@ export function unitDirection(
   target: { gl: number; gb: number; dist: number },
 ): { x: number; y: number; z: number } {
   const o = galacticToCartesian(observer.gl, observer.gb, observer.dist)
+  return unitDirectionFromCart(o, target)
+}
+
+function unitDirectionFromCart(oCart: Vec3, target: { gl: number; gb: number; dist: number }) {
   const t = galacticToCartesian(target.gl, target.gb, target.dist)
-  const dx = t.x - o.x
-  const dy = t.y - o.y
-  const dz = t.z - o.z
+  const dx = t.x - oCart.x
+  const dy = t.y - oCart.y
+  const dz = t.z - oCart.z
   const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
   if (d < 1e-10) return { x: 0, y: 0, z: 1 }
   return { x: dx / d, y: dy / d, z: dz / d }
@@ -101,14 +105,13 @@ export type SelectionAlgorithm =
   | "stable"
   | "random"
 
-// Compute a single RelativePulsar from a Pulsar + origin (skipping selection)
-function makeRelative(p: Pulsar, origin: { gl: number; gb: number; dist: number }): RelativePulsar | null {
-  const rel = relativePosition(origin, { gl: p.gl, gb: p.gb, dist: p.dist })
+// Compute a single RelativePulsar from a Pulsar + precomputed observer cartesian
+function makeRelative(p: Pulsar, oCart: Vec3): RelativePulsar | null {
+  const rel = relativePositionFromCart(oCart, { gl: p.gl, gb: p.gb, dist: p.dist })
   if (rel.dist < 1e-6) return null
-  const angle = Math.atan2(
-    Math.sin(rel.gl * DEG) * Math.cos(rel.gb * DEG),
-    Math.cos(rel.gl * DEG) * Math.cos(rel.gb * DEG),
-  )
+  // cos(gb) factors cancel inside atan2, so the angle is simply rel.gl in radians
+  // (wrapped to -π..π).
+  const angle = Math.atan2(Math.sin(rel.gl * DEG), Math.cos(rel.gl * DEG))
   return { pulsar: p, gl: rel.gl, gb: rel.gb, dist: rel.dist, angle, score: 0 }
 }
 
@@ -119,8 +122,9 @@ function simpleSelect(
   count: number,
   algorithm: Exclude<SelectionAlgorithm, "gdop">,
 ): RelativePulsar[] {
+  const oCart = galacticToCartesian(origin.gl, origin.gb, origin.dist)
   const all = pulsars
-    .map((p) => makeRelative(p, origin))
+    .map((p) => makeRelative(p, oCart))
     .filter((rp): rp is RelativePulsar => rp !== null)
 
   if (algorithm === "random") {
@@ -167,8 +171,11 @@ export function selectPulsars(
     quality: number // individual pulsar quality (longevity + distance)
   }> = []
 
+  // Precompute observer cartesian once — 3924 pulsars × 2 trig calls saved
+  const oCart = galacticToCartesian(origin.gl, origin.gb, origin.dist)
+
   for (const p of pulsars) {
-    const rel = relativePosition(origin, { gl: p.gl, gb: p.gb, dist: p.dist })
+    const rel = relativePositionFromCart(oCart, { gl: p.gl, gb: p.gb, dist: p.dist })
     if (rel.dist < 1e-6) continue
 
     const longevity = longevityScore(p.p0, p.p1)
@@ -186,7 +193,7 @@ export function selectPulsars(
 
     const quality = 0.5 * longevity + 0.3 * distScore + 0.2 * (p.p1 !== null ? 1 : 0.3)
 
-    const unitVec = unitDirection(origin, { gl: p.gl, gb: p.gb, dist: p.dist })
+    const unitVec = unitDirectionFromCart(oCart, { gl: p.gl, gb: p.gb, dist: p.dist })
 
     candidates.push({ pulsar: p, rel, unitVec, quality })
   }
@@ -258,8 +265,8 @@ export function selectPulsars(
     const chosen = pool.splice(bestIdx, 1)[0]!
 
     const angle = Math.atan2(
-      Math.sin(chosen.rel.gl * DEG) * Math.cos(chosen.rel.gb * DEG),
-      Math.cos(chosen.rel.gl * DEG) * Math.cos(chosen.rel.gb * DEG),
+      Math.sin(chosen.rel.gl * DEG),
+      Math.cos(chosen.rel.gl * DEG),
     )
 
     selected.push({

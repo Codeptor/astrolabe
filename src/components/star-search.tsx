@@ -164,10 +164,13 @@ export function StarSearch({ stars, selected, onSelect, closeSignal }: StarSearc
   // Expose focus via global keyboard listener
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
-        e.preventDefault()
-        inputRef.current?.focus()
+      if (e.key !== "/") return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae) {
+        if (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable) return
       }
+      e.preventDefault()
+      inputRef.current?.focus()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
