@@ -16,7 +16,7 @@ import {
 } from "@/lib/state"
 import { useTheme } from "@/lib/theme"
 import { playPulsar, playToggleCue, type PulsarVoice } from "@/lib/pulsar-audio"
-import Plaque from "@/components/plaque"
+import Plaque, { type CursorReadout } from "@/components/plaque"
 import { StarSearch } from "@/components/star-search"
 import { PulsarTooltip } from "@/components/pulsar-tooltip"
 import { ExportButton } from "@/components/export-button"
@@ -148,6 +148,7 @@ function PageInner() {
   const [pulsarCardOpen, setPulsarCardOpen] = useState(false)
   const [pulsarCardAnchor, setPulsarCardAnchor] = useState<{ top: number; left: number } | null>(null)
   const [tourIndex, setTourIndex] = useState<number | null>(null)
+  const [cursorReadout, setCursorReadout] = useState<CursorReadout | null>(null)
   const enrichedCache = useRef(new Map<string, StarInfo>())
   const voiceRef = useRef<PulsarVoice | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -157,6 +158,13 @@ function PageInner() {
   // can tell whether a URL change came from us (ignore) or from the
   // browser back/forward (sync).
   const lastPushedSearch = useRef<string>(buildSearchString(initialState))
+
+  // Mirror of appState readable from stable handlers (keyboard) without
+  // forcing the handler effect to re-subscribe on every state change.
+  const appStateRef = useRef(appState)
+  useEffect(() => {
+    appStateRef.current = appState
+  }, [appState])
 
   // Load catalogue + stars once
   useEffect(() => {
@@ -174,14 +182,18 @@ function PageInner() {
     setTheme(appState.theme)
   }, [appState.theme, setTheme])
 
-  // State → URL: after each state change, replace the URL (no scroll, no history push)
+  // State → URL: after each state change, replace the URL (no scroll, no history push).
+  // During time-lapse playback the epoch ticks 20×/s — skip URL writes while
+  // playing, then flush the final epoch on pause. Effect re-runs when
+  // timePlaying flips to false with the latest appState already applied.
   useEffect(() => {
+    if (timePlaying) return
     const search = buildSearchString(appState)
     if (search === lastPushedSearch.current) return
     lastPushedSearch.current = search
     const href = `${window.location.pathname}${search}`
     window.history.replaceState(null, "", href)
-  }, [appState])
+  }, [appState, timePlaying])
 
   // URL → state: on browser back/forward, sync state from URL.
   // Skip if the current URL already matches our last pushed search.
@@ -234,12 +246,14 @@ function PageInner() {
       setEnriched(cached)
       return
     }
-    let cancelled = false
+    const controller = new AbortController()
     setEnriched(null)
-    fetch(`/api/star-resolve?name=${encodeURIComponent(name)}`)
+    fetch(`/api/star-resolve?name=${encodeURIComponent(name)}`, {
+      signal: controller.signal,
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled || !data) return
+        if (controller.signal.aborted || !data) return
         const e: StarInfo = {
           name: data.name ?? name,
           spType: data.spType ?? null,
@@ -253,12 +267,18 @@ function PageInner() {
           gl: typeof data.gl === "number" ? data.gl : origin.gl,
           gb: typeof data.gb === "number" ? data.gb : origin.gb,
         }
+        // Cap the cache so a user hopping through thousands of stars can't
+        // grow the map unbounded. 50 entries is plenty for any real session.
+        if (enrichedCache.current.size >= 50) {
+          const firstKey = enrichedCache.current.keys().next().value
+          if (firstKey !== undefined) enrichedCache.current.delete(firstKey)
+        }
         enrichedCache.current.set(name, e)
         setEnriched(e)
       })
       .catch(() => {})
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [origin.name, appState.observer.kind, origin.dist, origin.gl, origin.gb])
 
@@ -297,23 +317,26 @@ function PageInner() {
     return { median, minDist, maxDist, pdop }
   }, [plaqueData])
 
-  // Apply persisted locked pulsar from URL once data is loaded
+  // Hydrate the locked pulsar from the URL once catalogue data arrives.
   useEffect(() => {
     if (!plaqueData) return
-    if (appState.pulsar && !lockedPulsar) {
-      const found = plaqueData.pulsars.find(
-        (rp) => rp.pulsar.name === appState.pulsar,
-      )
-      if (found) setLockedPulsar(found)
-    }
-    // If selected pulsar drops out of the new selection, clear lock
-    if (lockedPulsar) {
-      const stillThere = plaqueData.pulsars.find(
-        (rp) => rp.pulsar.name === lockedPulsar.pulsar.name,
-      )
-      if (!stillThere) setLockedPulsar(null)
-    }
-  }, [plaqueData, appState.pulsar])
+    if (!appState.pulsar || lockedPulsar) return
+    const found = plaqueData.pulsars.find(
+      (rp) => rp.pulsar.name === appState.pulsar,
+    )
+    if (found) setLockedPulsar(found)
+  }, [plaqueData, appState.pulsar, lockedPulsar])
+
+  // If the locked pulsar drops out of the current selection (count change,
+  // new observer, etc.), clear the lock. Separate effect so it doesn't
+  // depend on appState.pulsar — the fresh lockedPulsar is all that matters.
+  useEffect(() => {
+    if (!plaqueData || !lockedPulsar) return
+    const stillThere = plaqueData.pulsars.some(
+      (rp) => rp.pulsar.name === lockedPulsar.pulsar.name,
+    )
+    if (!stillThere) setLockedPulsar(null)
+  }, [plaqueData, lockedPulsar])
 
   // Hover previews via the plaque line highlight + footer tooltip.
   // The pulsar *list* selection (highlight + auto-scroll) is reserved
@@ -420,17 +443,26 @@ function PageInner() {
     setPan({ x: 0, y: 0 })
   }, [setAppState])
 
-  // Time-lapse tick: advances epoch by one slider step every 50ms,
-  // loops from +10Myr back to -10Myr. Stops on any manual interaction.
+  // Time-lapse tick: advances epoch by one slider step ~every 50ms, gated on
+  // requestAnimationFrame + wallclock delta so background tabs throttle
+  // naturally and the UI never races ahead of a frame. Loops +10Myr → -10Myr.
   useEffect(() => {
     if (!timePlaying) return
-    const id = window.setInterval(() => {
-      setAppState((s) => {
-        const next = s.epoch + 50_000
-        return { ...s, epoch: next > 10_000_000 ? -10_000_000 : next }
-      })
-    }, 50)
-    return () => window.clearInterval(id)
+    let raf = 0
+    let last = performance.now()
+    const tick = (now: number) => {
+      const delta = now - last
+      if (delta >= 50) {
+        last = now - (delta % 50)
+        setAppState((s) => {
+          const next = s.epoch + 50_000
+          return { ...s, epoch: next > 10_000_000 ? -10_000_000 : next }
+        })
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
   }, [timePlaying])
 
   const handleRandomStar = useCallback(() => {
@@ -511,8 +543,11 @@ function PageInner() {
   // Global keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === "INPUT") return
-      if (document.activeElement?.tagName === "TEXTAREA") return
+      const ae = document.activeElement as HTMLElement | null
+      if (ae) {
+        const tag = ae.tagName
+        if (tag === "INPUT" || tag === "TEXTAREA" || ae.isContentEditable) return
+      }
 
       if (e.key === "Escape") {
         if (pulsarCardOpen) {
@@ -605,7 +640,7 @@ function PageInner() {
         setEmbedOpen(true)
       } else if (e.key === "c" || e.key === "C") {
         if (infoOpen || coordOpen || embedOpen || viewsOpen) return
-        const url = shareableUrl(appState)
+        const url = shareableUrl(appStateRef.current)
         if (!url || typeof navigator === "undefined" || !navigator.clipboard) return
         navigator.clipboard
           .writeText(url)
@@ -624,7 +659,7 @@ function PageInner() {
         setViewsOpen((v) => !v)
       } else if (e.key === "i" || e.key === "I") {
         if (infoOpen || coordOpen || embedOpen || viewsOpen) return
-        if (appState.observer.kind !== "star") return
+        if (appStateRef.current.observer.kind !== "star") return
         setInfoCardOpen((v) => {
           if (!v) {
             const btn = document.querySelector<HTMLElement>('[aria-label^="more info on"]')
@@ -683,6 +718,8 @@ function PageInner() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
+    // appState intentionally omitted — read via appStateRef.current so the
+    // handler doesn't re-subscribe on every epoch tick during time-lapse.
   }, [
     infoOpen,
     coordOpen,
@@ -699,7 +736,6 @@ function PageInner() {
     cyclePulsar,
     showToast,
     setAppState,
-    appState,
   ])
 
   if (pulsars.length === 0) {
@@ -813,9 +849,9 @@ function PageInner() {
           </div>
         )}
 
-        <div className="flex flex-col items-end gap-3 pointer-events-auto">
+        <div className="flex flex-col items-end gap-3 pointer-events-none">
           {/* Action buttons */}
-          <div className="flex items-center gap-4 leading-none text-[10px]">
+          <div className="flex items-center gap-4 leading-none text-[10px] pointer-events-auto">
             <button
               type="button"
               onClick={(e) => {
@@ -939,7 +975,7 @@ function PageInner() {
           {/* Pulsar count slider */}
           {appState.mode !== "1972" && (
             <div
-              className="flex items-center gap-1.5 text-[9px] text-foreground/55 select-none"
+              className="flex items-center gap-1.5 text-[9px] text-foreground/55 select-none pointer-events-auto"
               style={{ fontFamily: "var(--font-mono)" }}
             >
               <span className="text-foreground/75 w-3 text-right">n</span>
@@ -968,7 +1004,7 @@ function PageInner() {
 
           {/* Time machine slider — applies synthetic proper motion */}
           <div
-            className="flex items-center gap-1.5 text-[9px] text-foreground/55 select-none"
+            className="flex items-center gap-1.5 text-[9px] text-foreground/55 select-none pointer-events-auto"
             style={{ fontFamily: "var(--font-mono)" }}
           >
             <button
@@ -1010,12 +1046,14 @@ function PageInner() {
             </span>
           </div>
 
-          {/* Legend + shortcuts */}
+          {/* Legend + stats + shortcuts — original stacked layout,
+              right-aligned with generous vertical rhythm so the sections
+              breathe between each other. */}
           <div className="text-[9px] text-right leading-relaxed whitespace-nowrap hidden sm:block">
-            <div className="text-foreground/35 uppercase tracking-[0.1em] text-[8px] mb-1">
+            <div className="text-foreground/35 uppercase tracking-[0.15em] text-[8px] mb-2">
               legend
             </div>
-            <div className="text-foreground/55 space-y-0.5">
+            <div className="text-foreground/55 space-y-1.5">
               <div>
                 <span className="text-foreground/80">●</span> observer
               </div>
@@ -1032,10 +1070,10 @@ function PageInner() {
 
             {plaqueStats && (
               <>
-                <div className="text-foreground/35 uppercase tracking-[0.1em] text-[8px] mt-2.5 mb-1">
+                <div className="text-foreground/35 uppercase tracking-[0.15em] text-[8px] mt-4 mb-2">
                   stats
                 </div>
-                <div className="text-foreground/55 space-y-0.5 tabular-nums">
+                <div className="text-foreground/55 space-y-1.5 tabular-nums">
                   <div title="geometric dilution of precision — lower = tighter triangulation">
                     PDOP{" "}
                     <span className="text-foreground/85">
@@ -1062,44 +1100,6 @@ function PageInner() {
               </>
             )}
 
-            <div className="text-foreground/35 uppercase tracking-[0.1em] text-[8px] mt-2.5 mb-1">
-              shortcuts
-            </div>
-            <div className="text-foreground/55 space-y-0.5">
-              <div>hover · click to lock · click tooltip to copy</div>
-              <div>
-                <span className="font-mono text-foreground/75">/</span> search ·{" "}
-                <span className="font-mono text-foreground/75">R</span> random ·{" "}
-                <span className="font-mono text-foreground/75">⇧R</span> random * ·{" "}
-                <span className="font-mono text-foreground/75">K</span> coords ·{" "}
-                <span className="font-mono text-foreground/75">M</span> 1972
-              </div>
-              <div>
-                <span className="font-mono text-foreground/75">A</span> algo ·{" "}
-                <span className="font-mono text-foreground/75">T</span> theme ·{" "}
-                <span className="font-mono text-foreground/75">S</span> sound ·{" "}
-                <span className="font-mono text-foreground/75">G</span> rings ·{" "}
-                <span className="font-mono text-foreground/75">L</span> list
-              </div>
-              <div>
-                <span className="font-mono text-foreground/75">[ ]</span> count ·{" "}
-                <span className="font-mono text-foreground/75">, .</span> ±10 kyr ·{" "}
-                <span className="font-mono text-foreground/75">{"< >"}</span> ±1 Myr ·{" "}
-                <span className="font-mono text-foreground/75">0</span> now
-              </div>
-              <div>
-                <span className="font-mono text-foreground/75">E</span> share ·{" "}
-                <span className="font-mono text-foreground/75">C</span> copy link ·{" "}
-                <span className="font-mono text-foreground/75">F</span> fullscreen ·{" "}
-                <span className="font-mono text-foreground/75">V</span> saved views ·{" "}
-                <span className="font-mono text-foreground/75">I</span> star info
-              </div>
-              <div>
-                <span className="font-mono text-foreground/75">Tab</span> cycle ·{" "}
-                <span className="font-mono text-foreground/75">?</span> help ·{" "}
-                <span className="font-mono text-foreground/75">Esc</span> reset
-              </div>
-            </div>
           </div>
         </div>
       </header>
@@ -1167,6 +1167,7 @@ function PageInner() {
               showRings={appState.rings}
               onHover={setHoveredPulsar}
               onClick={handlePulsarSelect}
+              onCursor={setCursorReadout}
             />
           </div>
         )}
@@ -1515,6 +1516,53 @@ function PageInner() {
         </div>
       )}
 
+      {/* Floating shortcut reference — bottom-right, above the footer.
+          Sits over the plaque with a soft backdrop blur so it stays legible
+          on any theme without boxing it in with a border. */}
+      <aside
+        aria-label="keyboard shortcuts"
+        className="hidden sm:block fixed bottom-14 right-4 z-40 pointer-events-none text-[9px] text-right leading-relaxed whitespace-nowrap"
+      >
+        <div className="text-foreground/35 uppercase tracking-[0.15em] text-[8px] mb-2">
+          shortcuts
+        </div>
+        <div className="text-foreground/55 space-y-1.5">
+          <div>hover · click to lock · click tooltip to copy</div>
+          <div>
+            <span className="font-mono text-foreground/75">/</span> search ·{" "}
+            <span className="font-mono text-foreground/75">R</span> random ·{" "}
+            <span className="font-mono text-foreground/75">⇧R</span> random * ·{" "}
+            <span className="font-mono text-foreground/75">K</span> coords ·{" "}
+            <span className="font-mono text-foreground/75">M</span> 1972
+          </div>
+          <div>
+            <span className="font-mono text-foreground/75">A</span> algo ·{" "}
+            <span className="font-mono text-foreground/75">T</span> theme ·{" "}
+            <span className="font-mono text-foreground/75">S</span> sound ·{" "}
+            <span className="font-mono text-foreground/75">G</span> rings ·{" "}
+            <span className="font-mono text-foreground/75">L</span> list
+          </div>
+          <div>
+            <span className="font-mono text-foreground/75">[ ]</span> count ·{" "}
+            <span className="font-mono text-foreground/75">, .</span> ±10 kyr ·{" "}
+            <span className="font-mono text-foreground/75">{"< >"}</span> ±1 Myr ·{" "}
+            <span className="font-mono text-foreground/75">0</span> now
+          </div>
+          <div>
+            <span className="font-mono text-foreground/75">E</span> share ·{" "}
+            <span className="font-mono text-foreground/75">C</span> copy link ·{" "}
+            <span className="font-mono text-foreground/75">F</span> fullscreen ·{" "}
+            <span className="font-mono text-foreground/75">V</span> saved views ·{" "}
+            <span className="font-mono text-foreground/75">I</span> star info
+          </div>
+          <div>
+            <span className="font-mono text-foreground/75">Tab</span> cycle ·{" "}
+            <span className="font-mono text-foreground/75">?</span> help ·{" "}
+            <span className="font-mono text-foreground/75">Esc</span> reset
+          </div>
+        </div>
+      </aside>
+
       <footer className="shrink-0 px-4 pb-2 sm:pb-3 flex items-center justify-between relative z-50 pointer-events-none">
         <div
           className={`min-h-[40px] w-fit pointer-events-auto ${activePulsar ? "cursor-pointer" : ""}`}
@@ -1533,6 +1581,15 @@ function PageInner() {
           />
         </div>
         <div className="flex items-center gap-3 shrink-0 pointer-events-auto">
+          {cursorReadout && (
+            <div
+              className="text-[9px] text-foreground/60 font-mono tabular-nums leading-none select-none whitespace-nowrap"
+              aria-live="off"
+              title="angle and distance from observer at cursor position"
+            >
+              θ {cursorReadout.angleDeg.toFixed(0)}° · d {cursorReadout.distKpc.toFixed(2)} kpc
+            </div>
+          )}
           {plaqueData && (
             <div className="flex items-center gap-0 text-[10px] text-foreground/70 border border-foreground/15 leading-none select-none">
               <button

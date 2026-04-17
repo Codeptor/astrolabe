@@ -1,4 +1,4 @@
-import React, { forwardRef, useState, useCallback, useMemo, useEffect } from "react"
+import React, { forwardRef, memo, useState, useCallback, useMemo, useEffect } from "react"
 import type { PlaqueData, RelativePulsar } from "@/lib/types"
 import { periodToTicks } from "@/lib/binary-encoding"
 import { GC_DIST_KPC } from "@/lib/constants"
@@ -41,11 +41,20 @@ function pixelsToKpc(px: number): number {
   return px / PX_PER_KPC
 }
 
-// 7yl4r convention: period.toString(2).replace(/0/g, '-').replace(/1/g, '|')
-// MSB first, drawn from line endpoint outward along the line direction.
+// Cached binary encoding — the set of distinct p0 values across the catalogue
+// is small and a pulsar's string doesn't change between renders, so caching
+// per-p0 avoids repeating the BigInt conversion on every hover/zoom/pan.
+const binaryStringCache = new Map<number, string>()
+
 function periodToBinaryString(p0: number): string {
+  const hit = binaryStringCache.get(p0)
+  if (hit !== undefined) return hit
   const ticks = periodToTicks(p0)
-  return ticks.map((b) => (b === 1 ? "|" : "-")).join("")
+  let out = ""
+  for (let i = 0; i < ticks.length; i++) out += ticks[i] === 1 ? "|" : "-"
+  if (binaryStringCache.size > 8192) binaryStringCache.clear()
+  binaryStringCache.set(p0, out)
+  return out
 }
 
 // Polar to cartesian (angle in radians, SVG y-down)
@@ -82,6 +91,11 @@ function binaryTextLen(bits: number): number {
   return X_SHIFT + bits * CHAR_WIDTH
 }
 
+export interface CursorReadout {
+  angleDeg: number
+  distKpc: number
+}
+
 interface PlaqueProps {
   data: PlaqueData
   activePulsar: RelativePulsar | null
@@ -89,42 +103,144 @@ interface PlaqueProps {
   showRings: boolean
   onHover: (pulsar: RelativePulsar | null) => void
   onClick: (pulsar: RelativePulsar | null) => void
-}
-
-interface CursorReadout {
-  angleDeg: number
-  distKpc: number
+  onCursor?: (cursor: CursorReadout | null) => void
 }
 
 function buildAriaSummary(data: PlaqueData): string {
   const { pulsars, origin, gcDist } = data
-  const dists = pulsars.map((p) => p.dist)
-  const minD = Math.min(...dists)
-  const maxD = Math.max(...dists)
-  const periods = pulsars.map((p) => p.pulsar.p0)
-  const fastest = Math.min(...periods) * 1000
-  const slowest = Math.max(...periods) * 1000
+  let minD = Infinity
+  let maxD = -Infinity
+  let minP = Infinity
+  let maxP = -Infinity
+  for (const rp of pulsars) {
+    if (rp.dist < minD) minD = rp.dist
+    if (rp.dist > maxD) maxD = rp.dist
+    const p = rp.pulsar.p0
+    if (p < minP) minP = p
+    if (p > maxP) maxP = p
+  }
   return [
     `Pulsar map showing ${pulsars.length} pulsars from observer ${origin.name}.`,
     `Distance to galactic centre: ${gcDist.toFixed(1)} kiloparsecs.`,
     `Pulsar distances range from ${minD.toFixed(2)} to ${maxD.toFixed(2)} kiloparsecs.`,
-    `Pulsar periods range from ${fastest.toFixed(1)} milliseconds to ${slowest.toFixed(0)} milliseconds.`,
+    `Pulsar periods range from ${(minP * 1000).toFixed(1)} milliseconds to ${(maxP * 1000).toFixed(0)} milliseconds.`,
   ].join(" ")
 }
+
+// One pulsar line + text + hit-rect. Memoized so hover on a neighbour doesn't
+// re-render every line — only the one whose `isActive` actually flips.
+interface PulsarLineProps {
+  rp: RelativePulsar
+  isActive: boolean
+  renderAngle: number
+  onHover: (pulsar: RelativePulsar | null) => void
+  onClick: (pulsar: RelativePulsar) => void
+  revealed: boolean
+}
+
+const PulsarLine = memo(function PulsarLine({
+  rp,
+  isActive,
+  renderAngle,
+  onHover,
+  onClick,
+  revealed,
+}: PulsarLineProps) {
+  const binaryStr = periodToBinaryString(rp.pulsar.p0)
+  const textLen = binaryTextLen(binaryStr.length)
+  const directionalMax = maxRadialLen(renderAngle)
+  const maxLineLen = Math.max(directionalMax - textLen, 0)
+
+  const projDistKpc = rp.dist * Math.cos(rp.gb * DEG)
+  const zKpc = Math.abs(rp.dist * Math.sin(rp.gb * DEG))
+  const distPx = distToPixels(projDistKpc)
+  const zPx = zKpc * PX_PER_KPC
+  const totalLen = Math.min(distPx + zPx, maxLineLen)
+
+  const strokeClass = isActive ? "stroke-accent" : "stroke-line"
+  const fillClass = isActive ? "fill-accent" : "fill-line"
+  const w = isActive ? LINE_W_ACTIVE : LINE_W
+
+  // SVG rotate is CW, our angles are CCW math → negate
+  const rotDeg = (-renderAngle * 180) / Math.PI
+  const hitLen = totalLen + binaryStr.length * CHAR_WIDTH
+
+  return (
+    <g
+      style={{
+        transform: `translate(${EARTH_X}px, ${EARTH_Y}px) rotate(${rotDeg}deg)`,
+        transformOrigin: "0 0",
+        transformBox: "view-box",
+        transition: `transform ${TRANSITION}, opacity 240ms ease-out`,
+        opacity: revealed ? 1 : 0,
+      }}
+      role="button"
+      aria-label={`PSR ${rp.pulsar.name}, period ${(rp.pulsar.p0 * 1000).toFixed(2)} milliseconds, distance ${rp.dist.toFixed(2)} kiloparsecs`}
+    >
+      {/* Invisible hit area — covers smooth line + binary text width */}
+      <line
+        x1={0}
+        y1={0}
+        x2={hitLen}
+        y2={0}
+        stroke="transparent"
+        strokeWidth={16}
+        className="cursor-pointer"
+        style={{ transition: `x2 ${TRANSITION}` }}
+        onMouseEnter={() => onHover(rp)}
+        onMouseLeave={() => onHover(null)}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClick(rp)
+        }}
+      />
+      {/* Smooth line: distance + Z-offset */}
+      <line
+        x1={0}
+        y1={0}
+        x2={totalLen}
+        y2={0}
+        strokeWidth={w}
+        className={strokeClass}
+        style={{
+          pointerEvents: "none",
+          transition: `x2 ${TRANSITION}, stroke-width 200ms ease-out`,
+        }}
+      />
+      {/* Binary period text — sits at (totalLen + X_SHIFT, 0) in the
+          rotated frame so it rides the line endpoint as it moves. */}
+      <text
+        x={totalLen + X_SHIFT}
+        y={LINE_HEIGHT / 2 + Y_SHIFT}
+        textLength={binaryStr.length * CHAR_WIDTH}
+        lengthAdjust="spacingAndGlyphs"
+        className={fillClass}
+        style={{
+          fontSize: `${FONT_SIZE}px`,
+          fontFamily: "Asset, monospace",
+          pointerEvents: "none",
+          transition: `x ${TRANSITION}`,
+        }}
+      >
+        {binaryStr}
+      </text>
+    </g>
+  )
+})
 
 const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
   {
     data,
     activePulsar,
-    lockedPulsar,
+    lockedPulsar: _lockedPulsar,
     showRings,
     onHover,
     onClick,
+    onCursor,
   },
   ref,
 ) {
   const { pulsars, gcAngle, gcDist } = data
-  const [cursor, setCursor] = useState<CursorReadout | null>(null)
 
   // When the observer is at the galactic center, the GC reference line
   // becomes meaningless (you're at the point you'd be pointing to).
@@ -134,7 +250,7 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
 
   // Pulsar discovery animation: when the pulsar list changes (new observer,
   // mode, or count), the lines fade in one at a time in selection order.
-  // We track the count of "revealed" pulsars and increment it on a timer.
+  // Reveal count is tracked with a ref so the timer doesn't race with render.
   const [reveal, setReveal] = useState(pulsars.length)
   const pulsarKey = useMemo(
     () => pulsars.map((p) => p.pulsar.name).join(","),
@@ -154,34 +270,58 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pulsarKey])
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const svg = e.currentTarget
-    const ctm = svg.getScreenCTM()
-    if (!ctm) return
-    const pt = svg.createSVGPoint()
-    pt.x = e.clientX
-    pt.y = e.clientY
-    const local = pt.matrixTransform(ctm.inverse())
-    const dx = local.x - EARTH_X
-    const dy = EARTH_Y - local.y
-    const distPx = Math.sqrt(dx * dx + dy * dy)
-    if (distPx < EARTH_R * 2) {
-      setCursor(null)
-      return
-    }
-    const angleRad = Math.atan2(dy, dx)
-    let angleDeg = (angleRad * 180) / Math.PI
-    if (angleDeg < 0) angleDeg += 360
-    setCursor({ angleDeg, distKpc: pixelsToKpc(distPx) })
-  }, [])
+  // Stable click handler so PulsarLine memo doesn't break on every render.
+  const onLineClick = useCallback(
+    (rp: RelativePulsar) => {
+      const isLocked = _lockedPulsar?.pulsar.name === rp.pulsar.name
+      onClick(isLocked ? null : rp)
+    },
+    [onClick, _lockedPulsar],
+  )
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!onCursor) return
+      const svg = e.currentTarget
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
+      const pt = svg.createSVGPoint()
+      pt.x = e.clientX
+      pt.y = e.clientY
+      const local = pt.matrixTransform(ctm.inverse())
+      const dx = local.x - EARTH_X
+      const dy = EARTH_Y - local.y
+      const distPx = Math.sqrt(dx * dx + dy * dy)
+      if (distPx < EARTH_R * 2) {
+        onCursor(null)
+        return
+      }
+      const angleRad = Math.atan2(dy, dx)
+      let angleDeg = (angleRad * 180) / Math.PI
+      if (angleDeg < 0) angleDeg += 360
+      onCursor({ angleDeg, distKpc: pixelsToKpc(distPx) })
+    },
+    [onCursor],
+  )
 
   const handleMouseLeave = useCallback(() => {
-    setCursor(null)
-  }, [])
+    onCursor?.(null)
+  }, [onCursor])
 
   // GC reference line endpoint — always at angle 0 (right) in plot frame.
   // Pulsar angles are rotated by -gcAngle below so the GC stays the fixed anchor.
   const gc = endpoint(0, GC_DIST_PX)
+
+  // Clear the active pulsar and hover when clicking empty SVG space.
+  const onSvgClick = useCallback(
+    (e: React.MouseEvent<SVGSVGElement | SVGRectElement>) => {
+      if (e.target === e.currentTarget) {
+        e.stopPropagation()
+        onClick(null)
+      }
+    },
+    [onClick],
+  )
 
   return (
     <svg
@@ -194,25 +334,22 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
       aria-label={ariaLabel}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      onClick={(e) => {
-        // Bare-SVG click (not on a pulsar line) = unlock.
-        if (e.target === e.currentTarget) onClick(null)
-      }}
+      onClick={onSvgClick}
     >
       <title>Astrolabe pulsar map from {data.origin.name}</title>
       <desc>{ariaLabel}</desc>
 
-      {/* Background hit-rect so clicks anywhere off a pulsar still unlock */}
+      {/* Background hit-rect so clicks anywhere off a pulsar still unlock.
+          Uses the same handler as the bare-SVG click so there's no duplicate
+          pathway — hitting the rect unlocks, hitting a pulsar's hit-line
+          stops propagation and selects. */}
       <rect
         x={0}
         y={0}
         width={VB_W}
         height={VB_H}
         fill="transparent"
-        onClick={(e) => {
-          e.stopPropagation()
-          onClick(null)
-        }}
+        onClick={onSvgClick}
       />
 
       {/* Distance scale rings (toggleable) */}
@@ -268,110 +405,22 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         </g>
       )}
 
-      {/* Pulsar lines.
-          Each pulsar is a horizontal line in a rotated coordinate frame:
-          a single <g> applies a CSS `translate(EARTH) rotate(rotDeg)` so
-          (0, 0) sits at Earth and the local x-axis points along the line.
-          The line is drawn from x=0 to x=totalLen and the binary period
-          text sits at x=totalLen+X_SHIFT. CSS transitions the group's
-          transform (rotation) plus the SVG `x2` / `x` geometry attributes,
-          so when the time-machine slider drifts a pulsar the rotation,
-          length, and binary code all animate together in one motion. */}
+      {/* Pulsar lines — each is a memoized <PulsarLine>, so hovering one line
+          doesn't re-render the rest. */}
       {pulsars.map((rp, idx) => {
-        const projDistKpc = rp.dist * Math.cos(rp.gb * DEG)
-        const zKpc = Math.abs(rp.dist * Math.sin(rp.gb * DEG))
-
-        const distPx = distToPixels(projDistKpc)
-        const zPx = zKpc * PX_PER_KPC
-
         // GC stays fixed at angle 0 — rotate pulsars by -gcAngle around the observer
         const renderAngle = isAtGC ? rp.angle : rp.angle - gcAngle
-
-        // Cap total radial extent (smooth line + binary text) to viewBox edges.
-        // Floor is 0 not 8 — a hardcoded minimum lets long-binary pulsars push
-        // text past the edge and clip in exports.
-        const binaryStr = periodToBinaryString(rp.pulsar.p0)
-        const textLen = binaryTextLen(binaryStr.length)
-        const directionalMax = maxRadialLen(renderAngle)
-        const maxLineLen = Math.max(directionalMax - textLen, 0)
-        const totalLen = Math.min(distPx + zPx, maxLineLen)
-
         const isActive = activePulsar?.pulsar.name === rp.pulsar.name
-        const strokeClass = isActive ? "stroke-accent" : "stroke-line"
-        const fillClass = isActive ? "fill-accent" : "fill-line"
-        const w = isActive ? LINE_W_ACTIVE : LINE_W
-        const isRevealed = idx < reveal
-
-        // SVG rotate is CW, our angles are CCW math → negate
-        const rotDeg = (-renderAngle * 180) / Math.PI
-
-        const hitLen = totalLen + binaryStr.length * CHAR_WIDTH
-
         return (
-          <g
+          <PulsarLine
             key={rp.pulsar.name}
-            style={{
-              transform: `translate(${EARTH_X}px, ${EARTH_Y}px) rotate(${rotDeg}deg)`,
-              transformOrigin: "0 0",
-              transformBox: "view-box",
-              transition: `transform ${TRANSITION}, opacity 240ms ease-out`,
-              opacity: isRevealed ? 1 : 0,
-            }}
-            role="button"
-            aria-label={`PSR ${rp.pulsar.name}, period ${(rp.pulsar.p0 * 1000).toFixed(2)} milliseconds, distance ${rp.dist.toFixed(2)} kiloparsecs`}
-          >
-            {/* Invisible hit area — covers smooth line + binary text width */}
-            <line
-              x1={0}
-              y1={0}
-              x2={hitLen}
-              y2={0}
-              stroke="transparent"
-              strokeWidth={16}
-              className="cursor-pointer"
-              style={{ transition: `x2 ${TRANSITION}` }}
-              onMouseEnter={() => onHover(rp)}
-              onMouseLeave={() => onHover(null)}
-              onClick={(e) => {
-                e.stopPropagation()
-                const isLocked = lockedPulsar?.pulsar.name === rp.pulsar.name
-                onClick(isLocked ? null : rp)
-              }}
-            />
-            {/* Smooth line: distance + Z-offset */}
-            <line
-              x1={0}
-              y1={0}
-              x2={totalLen}
-              y2={0}
-              strokeWidth={w}
-              className={strokeClass}
-              style={{
-                pointerEvents: "none",
-                transition: `x2 ${TRANSITION}, stroke-width 200ms ease-out`,
-              }}
-            />
-            {/* Binary period text — sits at (totalLen + X_SHIFT, 0) in the
-                rotated frame so it rides the line endpoint as it moves.
-                textLength + lengthAdjust forces the rendered width to exactly
-                match binaryTextLen() so the viewBox clamp never under-estimates
-                and lets glyphs escape the edge during export. */}
-            <text
-              x={totalLen + X_SHIFT}
-              y={LINE_HEIGHT / 2 + Y_SHIFT}
-              textLength={binaryStr.length * CHAR_WIDTH}
-              lengthAdjust="spacingAndGlyphs"
-              className={fillClass}
-              style={{
-                fontSize: `${FONT_SIZE}px`,
-                fontFamily: "Asset, monospace",
-                pointerEvents: "none",
-                transition: `x ${TRANSITION}`,
-              }}
-            >
-              {binaryStr}
-            </text>
-          </g>
+            rp={rp}
+            isActive={isActive}
+            renderAngle={renderAngle}
+            onHover={onHover}
+            onClick={onLineClick}
+            revealed={idx < reveal}
+          />
         )
       })}
 
@@ -382,28 +431,9 @@ const Plaque = forwardRef<SVGSVGElement, PlaqueProps>(function Plaque(
         r={EARTH_R}
         className="fill-line stroke-none"
       />
-
-      {/* Cursor coordinate readout (bottom-right) */}
-      {cursor && (
-        <g style={{ pointerEvents: "none" }}>
-          <text
-            x={VB_W - PAD}
-            y={VB_H - PAD * 0.5}
-            className="fill-foreground"
-            style={{
-              fontSize: "9px",
-              fontFamily: "var(--font-mono)",
-              opacity: 0.7,
-            }}
-            textAnchor="end"
-            dominantBaseline="auto"
-          >
-            θ {cursor.angleDeg.toFixed(0)}° · d {cursor.distKpc.toFixed(2)} kpc
-          </text>
-        </g>
-      )}
     </svg>
   )
 })
 
-export default Plaque
+// Default export is memoized so identical data/activePulsar/etc refs skip the render.
+export default memo(Plaque)
