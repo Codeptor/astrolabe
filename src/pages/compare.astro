@@ -1,5 +1,6 @@
 ---
 import RootLayout from "../layouts/RootLayout.astro"
+import MobileNotice from "../components/MobileNotice.astro"
 import { ComparePage } from "../components/ComparePage"
 ---
 
@@ -9,4 +10,5 @@ import { ComparePage } from "../components/ComparePage"
   path="/compare"
 >
   <ComparePage client:only="react" />
+  <MobileNotice />
 </RootLayout>

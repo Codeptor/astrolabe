@@ -1,5 +1,6 @@
 ---
 import RootLayout from "../layouts/RootLayout.astro"
+import MobileNotice from "../components/MobileNotice.astro"
 import { App } from "../components/App"
 ---
 
@@ -7,4 +8,5 @@ import { App } from "../components/App"
   <App client:only="react">
     <div slot="fallback" class="h-svh"></div>
   </App>
+  <MobileNotice />
 </RootLayout>
